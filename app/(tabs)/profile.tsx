@@ -5,6 +5,7 @@ import { Strings } from '@/constants/Strings';
 import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Achievement, computeAchievements } from '@/lib/achievements';
+import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { readCache, writeCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -352,9 +353,9 @@ export default function Profile() {
 
         {/* Profile Header - Clean & Minimal */}
         <View style={[styles.profileCard, { backgroundColor: themeColors.surface }]}>
-          <View style={[styles.avatar, { backgroundColor: themeColors.primary }]}>
+          <View style={[styles.avatar, { backgroundColor: avatarColor(user?.user_metadata?.full_name || user?.email) }]}>
             <Typography variant="h1" color="#FFF">
-              {user?.email?.charAt(0).toUpperCase() || 'U'}
+              {avatarInitials(user?.user_metadata?.full_name, user?.email)}
             </Typography>
           </View>
           <View style={{ alignItems: 'center' }}>

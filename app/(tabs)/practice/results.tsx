@@ -9,6 +9,7 @@ import { readCache, writeCache } from '@/lib/cache';
 import { formatDuration } from '@/lib/format';
 import { modeLabel } from '@/lib/practice-modes';
 import { supabase } from '@/lib/supabase';
+import { tokenizeTranscript } from '@/lib/transcript';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -632,15 +633,32 @@ export default function ResultsScreen() {
                       )}
                     </View>
                     {transcriptExpanded ? (
-                      paragraphs.map((p, i) => (
-                        <Typography
-                          key={i}
-                          variant="body"
-                          style={{ lineHeight: 22, marginBottom: i === paragraphs.length - 1 ? 0 : 10 }}
-                        >
-                          {p}
-                        </Typography>
-                      ))
+                      paragraphs.map((p, i) => {
+                        const tokens = tokenizeTranscript(p);
+                        return (
+                          <Typography
+                            key={i}
+                            variant="body"
+                            style={{ lineHeight: 22, marginBottom: i === paragraphs.length - 1 ? 0 : 10 }}
+                          >
+                            {tokens.map((tok, j) =>
+                              tok.isFiller ? (
+                                <Typography
+                                  key={j}
+                                  variant="body"
+                                  color="#B45309"
+                                  weight="bold"
+                                  style={{ backgroundColor: '#FEF3C7' }}
+                                >
+                                  {tok.text}
+                                </Typography>
+                              ) : (
+                                tok.text
+                              )
+                            )}
+                          </Typography>
+                        );
+                      })
                     ) : (
                       <Typography
                         variant="body"

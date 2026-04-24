@@ -6,6 +6,7 @@ import { Typography } from '@/components/ui/Typography';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { supabase } from '@/lib/supabase';
+import { validatePassword } from '@/lib/validation';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -13,6 +14,9 @@ import { Alert, StyleSheet, View } from 'react-native';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
@@ -56,6 +60,12 @@ export default function ResetPassword() {
   }, []);
 
   async function updatePassword() {
+    const pErr = validatePassword(password);
+    const cErr = password !== confirm ? 'Las contraseñas no coinciden.' : null;
+    setPasswordError(pErr);
+    setConfirmError(cErr);
+    if (pErr || cErr) return;
+
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
 
@@ -72,7 +82,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <ScreenWrapper contentContainerStyle={styles.container}>
+    <ScreenWrapper contentContainerStyle={styles.container} keyboardAvoiding>
       <View style={styles.header}>
         <Typography variant="h2" align="center" style={styles.title}>
           Nueva Contraseña
@@ -86,8 +96,18 @@ export default function ResetPassword() {
         <Input
           label="Nueva contraseña"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(v) => { setPassword(v); if (passwordError) setPasswordError(null); }}
+          autoComplete="password-new"
           secureTextEntry
+          error={passwordError}
+        />
+        <Input
+          label="Confirmar contraseña"
+          value={confirm}
+          onChangeText={(v) => { setConfirm(v); if (confirmError) setConfirmError(null); }}
+          autoComplete="password-new"
+          secureTextEntry
+          error={confirmError}
         />
 
         <Button

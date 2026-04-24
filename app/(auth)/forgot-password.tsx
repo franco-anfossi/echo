@@ -7,25 +7,25 @@ import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { supabase } from '@/lib/supabase';
+import { validateEmail } from '@/lib/validation';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
 
   async function requestReset() {
-    if (!email) {
-      Alert.alert('Error', 'Por favor ingresa tu correo electrónico.');
-      return;
-    }
+    const eErr = validateEmail(email);
+    setEmailError(eErr);
+    if (eErr) return;
 
     setLoading(true);
-    // redirectTo should point to the deep link for reset-password
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: 'echo://auth/reset-password',
     });
 
@@ -40,7 +40,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <ScreenWrapper contentContainerStyle={styles.container}>
+    <ScreenWrapper contentContainerStyle={styles.container} keyboardAvoiding>
       <View style={styles.header}>
         <Typography variant="h2" align="center" style={styles.title}>
           Recuperar contraseña
@@ -54,9 +54,11 @@ export default function ForgotPassword() {
         <Input
           label={Strings.auth.emailLabel}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(null); }}
           autoCapitalize="none"
+          autoComplete="email"
           keyboardType="email-address"
+          error={emailError}
         />
 
         <Button

@@ -4,7 +4,9 @@ import { Input } from '@/components/ui/Input';
 import { Typography } from '@/components/ui/Typography';
 import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
+import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { readCache, writeCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -31,17 +33,37 @@ export default function Practice() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
   const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams();
   const { initialMode } = params;
+
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const favKey = user?.id ? `echo:favorites:${user.id}` : null;
 
   const [mode, setMode] = useState((initialMode as string) || 'improv');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalSearch, setModalSearch] = useState('');
   const [customModalVisible, setCustomModalVisible] = useState(false);
   const [customTopicText, setCustomTopicText] = useState('');
   const [debateStance, setDebateStance] = useState<'FOR' | 'AGAINST'>('FOR');
+
+  const filteredData = (() => {
+    const term = modalSearch.trim().toLowerCase();
+    const matched = !term
+      ? data
+      : data.filter((it) => {
+          const hay = `${it.title || ''} ${it.content || ''} ${it.description || ''}`.toLowerCase();
+          return hay.includes(term);
+        });
+    return [...matched].sort((a, b) => {
+      const af = favorites.includes(a.id) ? 0 : 1;
+      const bf = favorites.includes(b.id) ? 0 : 1;
+      return af - bf;
+    });
+  })();
 
   const isCustomItem = (item: any) => item && typeof item.id === 'string' && item.id.startsWith('custom-');
 
@@ -50,6 +72,23 @@ export default function Practice() {
       setMode(initialMode);
     }
   }, [initialMode]);
+
+  useEffect(() => {
+    if (!favKey) return;
+    readCache<string[]>(favKey).then((v) => {
+      if (Array.isArray(v)) setFavorites(v);
+    });
+  }, [favKey]);
+
+  const toggleFavorite = (id: string) => {
+    setFavorites((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (favKey) writeCache(favKey, next);
+      return next;
+    });
+  };
+
+  const isFavorite = (id: string) => favorites.includes(id);
 
   useEffect(() => {
     fetchData();
@@ -143,16 +182,30 @@ export default function Practice() {
 
   const renderSelectionItem = ({ item }: { item: any }) => (
     <TouchableOpacity
-      style={[styles.modalItem, { borderBottomColor: themeColors.border }]}
+      style={[styles.modalItem, { borderBottomColor: themeColors.border, flexDirection: 'row', alignItems: 'center', gap: 12 }]}
       onPress={() => {
         setSelectedItem(item);
         setModalVisible(false);
       }}
     >
-      <Typography variant="h4" weight="bold">{item.title}</Typography>
-      <Typography variant="caption" color={themeColors.subtext}>
-        {item.difficulty?.toUpperCase() || item.category || 'General'}
-      </Typography>
+      <View style={{ flex: 1 }}>
+        <Typography variant="h4" weight="bold">{item.title}</Typography>
+        <Typography variant="caption" color={themeColors.subtext}>
+          {item.difficulty?.toUpperCase() || item.category || 'General'}
+        </Typography>
+      </View>
+      <TouchableOpacity
+        onPress={(e) => { e.stopPropagation?.(); toggleFavorite(item.id); }}
+        accessibilityLabel={isFavorite(item.id) ? 'Quitar de favoritos' : 'Marcar como favorito'}
+        accessibilityRole="button"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons
+          name={isFavorite(item.id) ? 'star' : 'star-outline'}
+          size={22}
+          color={isFavorite(item.id) ? '#F59E0B' : themeColors.subtext}
+        />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 
@@ -336,14 +389,32 @@ export default function Practice() {
           <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
             <View style={styles.modalHeader}>
               <Typography variant="h3">Seleccionar</Typography>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                accessibilityLabel="Cerrar"
+                accessibilityRole="button"
+              >
                 <Ionicons name="close" size={24} color={themeColors.text} />
               </TouchableOpacity>
             </View>
+            <Input
+              placeholder="Buscar..."
+              value={modalSearch}
+              onChangeText={setModalSearch}
+              autoCapitalize="none"
+            />
+            <Typography variant="caption" color={themeColors.subtext} style={{ marginBottom: 4 }}>
+              {filteredData.length} de {data.length}
+            </Typography>
             <FlatList
-              data={data}
+              data={filteredData}
               renderItem={renderSelectionItem}
               keyExtractor={(item) => item.id}
+              ListEmptyComponent={
+                <Typography variant="caption" color={themeColors.subtext} align="center" style={{ marginTop: 16 }}>
+                  Sin resultados.
+                </Typography>
+              }
             />
           </View>
         </View>

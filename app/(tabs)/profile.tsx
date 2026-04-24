@@ -5,10 +5,11 @@ import { Strings } from '@/constants/Strings';
 import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Achievement, computeAchievements } from '@/lib/achievements';
+import { readCache, writeCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const METRICS = [
@@ -37,6 +38,26 @@ export default function Profile() {
   const [bestScoreEver, setBestScoreEver] = useState(0);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number }[]>([]);
+
+  const cacheKey = user?.id ? `echo:profile:${user.id}` : null;
+
+  useEffect(() => {
+    if (!cacheKey) return;
+    readCache<any>(cacheKey).then((c) => {
+      if (!c) return;
+      setStats((prev: any) => prev || c.stats || null);
+      setMonthlyAverage((prev) => prev || c.monthlyAverage || 0);
+      setBestScoreEver((prev) => prev || c.bestScoreEver || 0);
+      setAchievements((prev) => (prev.length ? prev : c.achievements || []));
+      setModeBreakdown((prev) => (prev.length ? prev : c.modeBreakdown || []));
+      setLoading(false);
+    });
+  }, [cacheKey]);
+
+  useEffect(() => {
+    if (!cacheKey || loading) return;
+    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown });
+  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown]);
 
   useFocusEffect(
     useCallback(() => {

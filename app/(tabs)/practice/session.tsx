@@ -107,8 +107,20 @@ export default function SessionScreen() {
   async function startRecording() {
     try {
       if (permissionResponse?.status !== 'granted') {
-        const { status } = await requestPermission();
-        if (status !== 'granted') return;
+        const result = await requestPermission();
+        if (result.status !== 'granted') {
+          if (!result.canAskAgain) {
+            Alert.alert(
+              'Permiso de micrófono',
+              'Habilítalo en los ajustes del sistema para poder grabar.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Abrir ajustes', onPress: () => Linking.openSettings() },
+              ]
+            );
+          }
+          return;
+        }
       }
 
       await Audio.setAudioModeAsync({

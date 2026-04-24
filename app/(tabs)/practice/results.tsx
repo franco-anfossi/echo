@@ -2,12 +2,16 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { Typography } from '@/components/ui/Typography';
 import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { formatDuration } from '@/lib/format';
+import { modeLabel } from '@/lib/practice-modes';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Share, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInRight, ZoomIn } from 'react-native-reanimated';
 
 // Helper component for animating numbers naturally
@@ -15,7 +19,6 @@ const AnimatedScore = ({ score, color }: { score: number, color: string }) => {
   const [displayScore, setDisplayScore] = useState(0);
 
   useEffect(() => {
-    let start = 0;
     const duration = 1500;
     const startTime = Date.now();
 
@@ -46,6 +49,7 @@ const AnimatedScore = ({ score, color }: { score: number, color: string }) => {
 export default function ResultsScreen() {
   const { attemptId } = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
 
@@ -54,9 +58,15 @@ export default function ResultsScreen() {
   const [scores, setScores] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [feedback, setFeedback] = useState<any>(null);
+  const [isPersonalBest, setIsPersonalBest] = useState(false);
   const retryCount = useRef(0);
   const lastRetryTime = useRef(0);
   const isRequestInProgress = useRef(false);
+
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [transcriptExpanded, setTranscriptExpanded] = useState(false);
 
   useEffect(() => {
     if (!attemptId) return;
@@ -94,6 +104,28 @@ export default function ResultsScreen() {
         if (scoresRes.data) setScores(scoresRes.data);
         if (metricsRes.data) setMetrics(metricsRes.data);
         if (feedbackRes.data) setFeedback(feedbackRes.data);
+
+        // Personal best detection: highest score for this user+mode, excluding the current attempt
+        if (scoresRes.data?.overall_score && user?.id && attemptData.practice_type) {
+          try {
+            const { data: prevBestRows } = await supabase
+              .from('attempt_scores')
+              .select('overall_score, attempts!inner(user_id, practice_type, id)')
+              .eq('attempts.user_id', user.id)
+              .eq('attempts.practice_type', attemptData.practice_type)
+              .neq('attempt_id', attemptId)
+              .order('overall_score', { ascending: false })
+              .limit(1);
+            const prevBest = (prevBestRows && prevBestRows[0])
+              ? (prevBestRows[0] as any).overall_score
+              : 0;
+            if (scoresRes.data.overall_score > prevBest) {
+              setIsPersonalBest(true);
+            }
+          } catch (pbErr) {
+            console.error('PB lookup failed', pbErr);
+          }
+        }
 
         setLoading(false);
       } else if (attemptData.status === 'failed') {
@@ -135,6 +167,78 @@ export default function ResultsScreen() {
     }
   };
 
+  // Cleanup sound on unmount
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+    };
+  }, []);
+
+  const togglePlayback = async () => {
+    if (!attempt?.audio_path) return;
+    try {
+      if (soundRef.current) {
+        if (isPlaying) {
+          await soundRef.current.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await soundRef.current.playAsync();
+          setIsPlaying(true);
+        }
+        return;
+      }
+      setAudioLoading(true);
+      const { data, error } = await supabase.storage
+        .from('recordings')
+        .createSignedUrl(attempt.audio_path, 60 * 10);
+      if (error || !data?.signedUrl) throw error || new Error('No signed URL');
+
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: data.signedUrl },
+        { shouldPlay: true }
+      );
+      soundRef.current = sound;
+      setIsPlaying(true);
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (!status.isLoaded) return;
+        if (status.didJustFinish) {
+          setIsPlaying(false);
+          sound.setPositionAsync(0).catch(() => {});
+        }
+      });
+    } catch (e) {
+      console.error('Playback failed', e);
+      Alert.alert('Audio', 'No se pudo reproducir el audio.');
+    } finally {
+      setAudioLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!scores) return;
+    const lines = [
+      `🎙️ Echo · Práctica de oratoria`,
+      ``,
+      `Modo: ${modeLabel(attempt?.practice_type)}`,
+      `Puntuación global: ${scores.overall_score ?? 0}/100`,
+      ``,
+      `· Fluidez: ${scores.fluency_score ?? 0}`,
+      `· Vocabulario: ${scores.vocabulary_score ?? 0}`,
+      `· Gramática: ${scores.grammar_score ?? 0}`,
+      `· Coherencia: ${scores.coherence_score ?? 0}`,
+    ];
+    if (metrics?.wpm) lines.push(`· Velocidad: ${metrics.wpm} ppm`);
+    try {
+      await Share.share({ message: lines.join('\n') });
+    } catch (e) {
+      console.error('Share failed', e);
+    }
+  };
+
   const handleDelete = async () => {
     Alert.alert(
       'Eliminar Intento',
@@ -161,12 +265,6 @@ export default function ResultsScreen() {
     );
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   if (loading || (attempt?.status !== 'completed' && attempt?.status !== 'failed')) {
     return (
       <ScreenWrapper>
@@ -182,12 +280,34 @@ export default function ResultsScreen() {
   }
 
   if (attempt?.status === 'failed') {
+    const handleManualRetry = async () => {
+      retryCount.current = 0;
+      lastRetryTime.current = 0;
+      setLoading(true);
+      try {
+        await supabase.from('attempts').update({ status: 'uploaded' }).eq('id', attemptId);
+        await supabase.functions.invoke('transcribe-audio', { body: { attemptId } });
+      } catch (e) {
+        console.error('Manual retry failed', e);
+        Alert.alert('Error', 'No se pudo reintentar el análisis.');
+        setLoading(false);
+      }
+    };
     return (
       <ScreenWrapper>
         <View style={styles.center}>
           <Ionicons name="alert-circle" size={64} color={themeColors.error} />
           <Typography variant="h3" style={{ marginTop: 20 }}>Error en el análisis</Typography>
-          <Button title="Volver" onPress={() => router.replace('/(tabs)/practice')} style={{ marginTop: 20 }} />
+          <Typography variant="caption" color={themeColors.subtext} align="center" style={{ marginTop: 8 }}>
+            Algo salió mal procesando tu grabación.
+          </Typography>
+          <Button title="Reintentar análisis" onPress={handleManualRetry} style={{ marginTop: 20, width: '100%' }} />
+          <Button
+            title="Volver"
+            variant="ghost"
+            onPress={() => router.replace('/(tabs)/practice')}
+            style={{ marginTop: 8, width: '100%' }}
+          />
         </View>
       </ScreenWrapper>
     );
@@ -201,7 +321,20 @@ export default function ResultsScreen() {
 
         {/* Top Actions */}
         <Animated.View entering={FadeInDown.delay(100).duration(600)} style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.closeButton}>
+          <TouchableOpacity
+            onPress={handleShare}
+            style={[styles.closeButton, { marginRight: 8 }]}
+            accessibilityLabel="Compartir resultado"
+            accessibilityRole="button"
+          >
+            <Ionicons name="share-outline" size={22} color={themeColors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.replace('/(tabs)')}
+            style={styles.closeButton}
+            accessibilityLabel="Cerrar"
+            accessibilityRole="button"
+          >
             <Ionicons name="close" size={24} color={themeColors.text} />
           </TouchableOpacity>
         </Animated.View>
@@ -212,6 +345,40 @@ export default function ResultsScreen() {
           style={[styles.mainScoreCard, { backgroundColor: themeColors.surface }]}
         >
           <View style={styles.scoreCircleBackground} />
+          {isPersonalBest && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#FACC1522',
+              borderColor: '#F59E0B',
+              borderWidth: 1,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              marginBottom: 8,
+            }}>
+              <Ionicons name="trophy" size={14} color="#B45309" />
+              <Typography variant="caption" weight="black" color="#B45309" style={{ letterSpacing: 0.5 }}>
+                ¡RÉCORD PERSONAL!
+              </Typography>
+            </View>
+          )}
+          {(() => {
+            const s = scores?.overall_score || 0;
+            let msg = 'Buen comienzo';
+            let color = themeColors.primary;
+            if (s >= 90) { msg = '¡Excepcional!'; color = '#16A34A'; }
+            else if (s >= 75) { msg = 'Muy bien hecho'; color = '#10B981'; }
+            else if (s >= 60) { msg = 'Vas por buen camino'; color = '#0EA5E9'; }
+            else if (s >= 40) { msg = 'Sigue practicando'; color = '#F59E0B'; }
+            else if (s > 0) { msg = 'Cada práctica suma'; color = '#EF4444'; }
+            return (
+              <Typography variant="h3" weight="bold" color={color} style={{ marginBottom: 4 }}>
+                {msg}
+              </Typography>
+            );
+          })()}
           <Typography variant="label" color={themeColors.subtext} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
             PUNTUACIÓN GLOBAL
           </Typography>
@@ -219,6 +386,36 @@ export default function ResultsScreen() {
             <AnimatedScore score={scores?.overall_score || 0} color={themeColors.primary} />
             <Typography variant="h3" color={themeColors.subtext} style={{ marginBottom: 6 }}>/100</Typography>
           </View>
+
+          {attempt?.audio_path && (
+            <TouchableOpacity
+              onPress={togglePlayback}
+              disabled={audioLoading}
+              style={{
+                marginTop: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 999,
+                backgroundColor: themeColors.inputBackground,
+              }}
+            >
+              {audioLoading ? (
+                <ActivityIndicator size="small" color={themeColors.primary} />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? 'pause-circle' : 'play-circle'}
+                  size={22}
+                  color={themeColors.primary}
+                />
+              )}
+              <Typography variant="label" weight="bold" color={themeColors.primary}>
+                {isPlaying ? 'Pausar grabación' : 'Escuchar grabación'}
+              </Typography>
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
         <Typography variant="h3" style={{ marginBottom: 12 }}>Métricas Técnicas</Typography>
@@ -306,6 +503,61 @@ export default function ResultsScreen() {
             ))}
           </View>
         </Animated.View>
+
+        {/* Transcript Section */}
+        {feedback?.transcript && (
+          <Animated.View entering={FadeInDown.delay(1200).duration(600)} style={styles.section}>
+            <TouchableOpacity
+              onPress={() => setTranscriptExpanded((v) => !v)}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}
+            >
+              <Typography variant="h3">Transcripción</Typography>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Typography variant="caption" color={themeColors.subtext}>
+                  {transcriptExpanded ? 'Ocultar' : 'Mostrar'}
+                </Typography>
+                <Ionicons
+                  name={transcriptExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={themeColors.subtext}
+                />
+              </View>
+            </TouchableOpacity>
+            <View style={[styles.transcriptCard, { backgroundColor: themeColors.inputBackground }]}>
+              {(() => {
+                const text: string = feedback.transcript;
+                const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+                const dur = attempt?.duration_seconds || 0;
+                const durationLabel = formatDuration(dur);
+                return (
+                  <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="document-text-outline" size={14} color={themeColors.subtext} />
+                      <Typography variant="caption" color={themeColors.subtext}>
+                        {wordCount} palabra{wordCount === 1 ? '' : 's'}
+                      </Typography>
+                    </View>
+                    {dur > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="time-outline" size={14} color={themeColors.subtext} />
+                        <Typography variant="caption" color={themeColors.subtext}>
+                          {durationLabel}
+                        </Typography>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
+              <Typography
+                variant="body"
+                style={{ lineHeight: 22 }}
+                numberOfLines={transcriptExpanded ? undefined : 4}
+              >
+                {feedback.transcript}
+              </Typography>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Actions */}
         <Animated.View entering={FadeIn.delay(1500).duration(800)} style={styles.actions}>
@@ -456,6 +708,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     flexDirection: 'row',
     gap: 16,
+  },
+  transcriptCard: {
+    padding: 16,
+    borderRadius: 16,
   },
   iconBox: {
     width: 32,

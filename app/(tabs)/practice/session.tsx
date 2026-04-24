@@ -4,12 +4,15 @@ import { Typography } from '@/components/ui/Typography';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { formatDuration } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function SessionScreen() {
   const params = useLocalSearchParams();
@@ -36,7 +39,6 @@ export default function SessionScreen() {
   const MAX_DURATION = getMaxDuration();
   const [timeLeft, setTimeLeft] = useState(MAX_DURATION);
   const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [metering, setMetering] = useState<number>(-160);
 
   useEffect(() => {
     let interval: any;
@@ -57,11 +59,56 @@ export default function SessionScreen() {
     }
   }, [timeLeft, recordingStatus]);
 
+  // Light haptic warning at the 10s and 5s marks while recording
+  useEffect(() => {
+    if (recordingStatus !== 'recording') return;
+    if (timeLeft === 10 || timeLeft === 5) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+  }, [timeLeft, recordingStatus]);
+
+  // Block accidental leaves while recording / uploading
+  const navigation = useNavigation();
+  useEffect(() => {
+    const isBusy = recordingStatus === 'recording' || recordingStatus === 'uploading';
+    if (!isBusy) return;
+
+    const beforeRemove = navigation.addListener('beforeRemove', (e: any) => {
+      e.preventDefault();
+      Alert.alert(
+        recordingStatus === 'recording' ? 'Salir de la grabación' : 'Subida en progreso',
+        recordingStatus === 'recording'
+          ? 'Si sales ahora perderás la grabación. ¿Continuar?'
+          : 'Tu grabación se está subiendo. Si sales podría no procesarse. ¿Continuar?',
+        [
+          { text: 'Quedarme', style: 'cancel' },
+          {
+            text: 'Salir',
+            style: 'destructive',
+            onPress: async () => {
+              if (recording) {
+                try { await recording.stopAndUnloadAsync(); } catch {}
+              }
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+
+    return () => {
+      beforeRemove();
+      backHandler.remove();
+    };
+  }, [recordingStatus, navigation, recording]);
+
   async function startRecording() {
     try {
       if (permissionResponse?.status !== 'granted') {
         const { status } = await requestPermission();
-        if (status !== 'granted') return Alert.alert('Permiso denegado', 'Necesitamos acceso al micrófono.');
+        if (status !== 'granted') return;
       }
 
       await Audio.setAudioModeAsync({
@@ -70,20 +117,22 @@ export default function SessionScreen() {
       });
 
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        (status) => setMetering(status.metering || -160)
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
 
       setRecording(recording);
       setRecordingStatus('recording');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (err) {
       console.error('Failed to start recording', err);
+      Alert.alert('Error', 'No se pudo iniciar la grabación.');
     }
   }
 
   async function stopRecording() {
     if (!recording) return;
     setRecordingStatus('review');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     setAudioUri(uri);
@@ -91,11 +140,7 @@ export default function SessionScreen() {
     await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatTime = formatDuration;
 
   async function uploadRecording() {
     if (!audioUri || !user) return;
@@ -106,7 +151,7 @@ export default function SessionScreen() {
       const fileName = `${user.id}/${Date.now()}.m4a`;
 
       // 1. Upload
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('recordings')
         .upload(fileName, arrayBuffer, { contentType: 'audio/m4a', upsert: false });
 
@@ -120,12 +165,17 @@ export default function SessionScreen() {
         finalTargetText = `Topic: ${targetText}. Stance: ${stance}`;
       }
 
+      // Only attach a topic_id when it looks like a real DB id (custom topics have ids like "custom-...")
+      const validTopicId = mode === 'improv' && topicId && !String(topicId).startsWith('custom-')
+        ? topicId
+        : null;
+
       // 2. Create Attempt
       const { data: attemptData, error: attemptError } = await supabase
         .from('attempts')
         .insert({
           user_id: user.id,
-          topic_id: mode === 'improv' ? topicId : null,
+          topic_id: validTopicId,
           audio_path: fileName,
           duration_seconds: MAX_DURATION - timeLeft,
           status: 'uploaded',
@@ -167,7 +217,7 @@ export default function SessionScreen() {
         return (
           <View style={[styles.cardContainer, { backgroundColor: themeColors.surface, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
             <Typography variant="label" color={themeColors.subtext} style={{ marginBottom: 16 }}>ENTREVISTADOR</Typography>
-            <Typography variant="h2" align="center" weight="bold">"{targetText}"</Typography>
+            <Typography variant="h2" align="center" weight="bold">«{targetText}»</Typography>
             <View style={{ marginTop: 32 }}>
               <Ionicons name="people-circle-outline" size={64} color={themeColors.subtext} />
             </View>
@@ -200,7 +250,7 @@ export default function SessionScreen() {
               ))}
             </View>
             <Typography variant="body" align="center" color={themeColors.text} style={{ marginTop: 32 }}>
-              "{targetText}"
+              «{targetText}»
             </Typography>
           </View>
         );
@@ -220,18 +270,63 @@ export default function SessionScreen() {
     }
   };
 
+  if (permissionResponse?.status === 'denied' && !permissionResponse.canAskAgain) {
+    return (
+      <ScreenWrapper>
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: themeColors.inputBackground, justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="mic-off" size={40} color={themeColors.error} />
+          </View>
+          <Typography variant="h2" weight="bold" align="center" style={{ marginTop: 24 }}>
+            Permiso de micrófono requerido
+          </Typography>
+          <Typography variant="body" color={themeColors.subtext} align="center" style={{ marginTop: 8, lineHeight: 22 }}>
+            Echo necesita acceso al micrófono para grabar tu práctica. Habilítalo en los ajustes del sistema.
+          </Typography>
+          <Button
+            title="Abrir ajustes"
+            onPress={() => Linking.openSettings()}
+            style={{ marginTop: 24, width: '100%' }}
+          />
+          <Button
+            title="Volver"
+            variant="ghost"
+            onPress={() => router.back()}
+            style={{ marginTop: 8, width: '100%' }}
+          />
+        </View>
+      </ScreenWrapper>
+    );
+  }
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
         <View style={styles.header}>
-          <View style={[styles.timerBubbleSmall, { backgroundColor: themeColors.surface }]}>
+          <View style={[
+            styles.timerBubbleSmall,
+            {
+              backgroundColor: themeColors.surface,
+              borderWidth: timeLeft <= 10 && recordingStatus === 'recording' ? 1 : 0,
+              borderColor: timeLeft <= 10 && recordingStatus === 'recording' ? themeColors.error : 'transparent',
+            }
+          ]}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: recordingStatus === 'recording' ? themeColors.error : themeColors.subtext, marginRight: 8 }} />
-            <Typography variant="label" monospace weight="bold">
+            <Typography
+              variant="label"
+              monospace
+              weight="bold"
+              color={timeLeft <= 10 && recordingStatus === 'recording' ? themeColors.error : undefined}
+            >
               {formatTime(timeLeft)}
             </Typography>
           </View>
 
-          <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
+          <TouchableOpacity
+            onPress={() => router.replace('/(tabs)')}
+            accessibilityLabel="Cerrar sesión de práctica"
+            accessibilityRole="button"
+          >
             <Ionicons name="close" size={28} color={themeColors.text} />
           </TouchableOpacity>
         </View>

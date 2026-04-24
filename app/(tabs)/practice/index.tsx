@@ -1,5 +1,6 @@
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Typography } from '@/components/ui/Typography';
 import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
@@ -18,6 +19,14 @@ const MODES = [
   { id: 'debate', label: 'Debate', icon: 'people-outline' },
 ];
 
+const MODE_TIPS: Record<string, string> = {
+  improv: 'Estructura tu idea: introducción → 2 puntos clave → cierre. Respira entre frases.',
+  reading: 'Lee con ritmo natural. Marca pausas al final de cada oración para mejorar la dicción.',
+  vocab: 'Inserta cada palabra de forma natural en una historia coherente, no como una lista.',
+  interview: 'Usa la técnica STAR: Situación, Tarea, Acción, Resultado. Mantén respuestas de 60-90s.',
+  debate: 'Empieza con tu tesis, da 2 argumentos sólidos y cierra con un llamado claro.',
+};
+
 export default function Practice() {
   const colorScheme = useColorScheme() ?? 'light';
   const themeColors = Colors[colorScheme];
@@ -30,7 +39,11 @@ export default function Practice() {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [customTopicText, setCustomTopicText] = useState('');
   const [debateStance, setDebateStance] = useState<'FOR' | 'AGAINST'>('FOR');
+
+  const isCustomItem = (item: any) => item && typeof item.id === 'string' && item.id.startsWith('custom-');
 
   useEffect(() => {
     if (initialMode && typeof initialMode === 'string') {
@@ -86,29 +99,46 @@ export default function Practice() {
   const handleStart = () => {
     if (!selectedItem) return;
 
-    // Prepare params based on mode
+    const custom = isCustomItem(selectedItem);
+
     const params: any = {
       mode: mode,
-      topicId: selectedItem.id, // ID reference
       topicTitle: selectedItem.title,
     };
+    if (!custom) {
+      params.topicId = selectedItem.id;
+    }
 
     if (mode === 'reading') {
       params.targetText = selectedItem.content;
     } else if (mode === 'vocab') {
       params.words = JSON.stringify(selectedItem.meta?.words || []);
-      params.targetText = selectedItem.content; // Instruction
+      params.targetText = selectedItem.content;
     } else if (mode === 'interview') {
-      params.targetText = selectedItem.content; // The Question
+      params.targetText = selectedItem.content;
     } else if (mode === 'debate') {
-      params.targetText = selectedItem.content; // The Statement
-      params.stance = debateStance; // User selected stance
+      params.targetText = selectedItem.content;
+      params.stance = debateStance;
+    } else if (mode === 'improv' && custom) {
+      params.targetText = selectedItem.title;
     }
 
     router.push({
       pathname: '/(tabs)/practice/session',
       params: params
     });
+  };
+
+  const applyCustomTopic = () => {
+    const trimmed = customTopicText.trim();
+    if (trimmed.length < 3) return;
+    setSelectedItem({
+      id: `custom-${Date.now()}`,
+      title: trimmed,
+      description: 'Tema personalizado',
+    });
+    setCustomTopicText('');
+    setCustomModalVisible(false);
   };
 
   const renderSelectionItem = ({ item }: { item: any }) => (
@@ -134,7 +164,7 @@ export default function Practice() {
         const words = selectedItem.meta?.words || [];
         return (
           <>
-            <Typography variant="h3" align="center" style={{ marginBottom: 16 }}>"{selectedItem.title}"</Typography>
+            <Typography variant="h3" align="center" style={{ marginBottom: 16 }}>«{selectedItem.title}»</Typography>
             <Typography variant="body" align="center" style={{ marginBottom: 24 }}>{selectedItem.content}</Typography>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
               {words.map((w: string, i: number) => (
@@ -149,7 +179,7 @@ export default function Practice() {
         const currentStance = debateStance || 'FOR';
         return (
           <>
-            <Typography variant="h3" align="center" style={{ marginBottom: 16 }}>"{selectedItem.title}"</Typography>
+            <Typography variant="h3" align="center" style={{ marginBottom: 16 }}>«{selectedItem.title}»</Typography>
             <Typography variant="h4" align="center" style={{ marginBottom: 24 }}>{selectedItem.content}</Typography>
 
             <View style={{ marginTop: 8, alignItems: 'center' }}>
@@ -182,13 +212,13 @@ export default function Practice() {
         return (
           <>
             <Typography variant="label" align="center" color={themeColors.subtext} style={{ marginBottom: 12 }}>PREGUNTA</Typography>
-            <Typography variant="h2" align="center" weight="bold">"{selectedItem.content}"</Typography>
+            <Typography variant="h2" align="center" weight="bold">«{selectedItem.content}»</Typography>
           </>
         );
       case 'reading':
         return (
           <>
-            <Typography variant="h3" align="center" style={{ marginBottom: 12 }}>"{selectedItem.title}"</Typography>
+            <Typography variant="h3" align="center" style={{ marginBottom: 12 }}>«{selectedItem.title}»</Typography>
             <Typography variant="body" align="center" color={themeColors.subtext} numberOfLines={6}>
               {selectedItem.content}
             </Typography>
@@ -197,7 +227,7 @@ export default function Practice() {
       default: // Improv
         return (
           <>
-            <Typography variant="h3" align="center" style={{ marginBottom: 12 }}>"{selectedItem.title}"</Typography>
+            <Typography variant="h3" align="center" style={{ marginBottom: 12 }}>«{selectedItem.title}»</Typography>
             <Typography variant="body" align="center" color={themeColors.subtext}>
               {selectedItem.description}
             </Typography>
@@ -240,6 +270,15 @@ export default function Practice() {
           <ActivityIndicator size="large" color={themeColors.primary} />
         ) : (
           <>
+            {MODE_TIPS[mode] && (
+              <View style={[styles.tipCard, { backgroundColor: themeColors.secondary, borderColor: themeColors.primary + '40' }]}>
+                <Ionicons name="bulb-outline" size={18} color={themeColors.primary} />
+                <Typography variant="caption" color={themeColors.text} style={{ flex: 1, lineHeight: 18 }}>
+                  {MODE_TIPS[mode]}
+                </Typography>
+              </View>
+            )}
+
             <View style={[styles.topicCard, { backgroundColor: themeColors.inputBackground }]}>
               <View style={styles.cardHeader}>
                 <Typography variant="label" color={themeColors.primary}>
@@ -256,12 +295,26 @@ export default function Practice() {
                 {renderCardContent()}
               </View>
 
-              <Button
-                title="Aleatorio"
-                variant="ghost"
-                onPress={getNewRandom}
-                icon={<Ionicons name="shuffle" size={20} color={themeColors.primary} />}
-              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    title="Aleatorio"
+                    variant="ghost"
+                    onPress={getNewRandom}
+                    icon={<Ionicons name="shuffle" size={20} color={themeColors.primary} />}
+                  />
+                </View>
+                {mode === 'improv' && (
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      title="Mi tema"
+                      variant="ghost"
+                      onPress={() => setCustomModalVisible(true)}
+                      icon={<Ionicons name="create-outline" size={20} color={themeColors.primary} />}
+                    />
+                  </View>
+                )}
+              </View>
             </View>
 
             <Button
@@ -295,6 +348,39 @@ export default function Practice() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={customModalVisible}
+        onRequestClose={() => setCustomModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.background, height: 'auto', paddingBottom: 32 }]}>
+            <View style={styles.modalHeader}>
+              <Typography variant="h3">Tema personalizado</Typography>
+              <TouchableOpacity onPress={() => setCustomModalVisible(false)}>
+                <Ionicons name="close" size={24} color={themeColors.text} />
+              </TouchableOpacity>
+            </View>
+            <Typography variant="caption" color={themeColors.subtext} style={{ marginBottom: 12 }}>
+              Escribe el tema sobre el que quieres improvisar.
+            </Typography>
+            <Input
+              placeholder="Ej. Por qué viajar nos cambia"
+              value={customTopicText}
+              onChangeText={setCustomTopicText}
+              autoFocus
+              maxLength={120}
+            />
+            <Button
+              title="Usar este tema"
+              onPress={applyCustomTopic}
+              style={{ marginTop: 8 }}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }
@@ -321,6 +407,15 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     minHeight: 280,
     justifyContent: 'space-between',
+  },
+  tipCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
   },
   cardHeader: {
     flexDirection: 'row',

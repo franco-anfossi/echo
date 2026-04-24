@@ -121,7 +121,8 @@ Deno.serve(async (req) => {
              break;
 
         default: // improv
-            prompt = `Act as a strict Spanish tutor. Topic: "${attempt.topics?.title || 'General'}".
+            const improvTopic = attempt.topics?.title || targetText || 'General';
+            prompt = `Act as a strict Spanish tutor. Topic: "${improvTopic}".
             TRANSCRIPT: "${transcriptText}".
             Analyze general speaking skills.
             - fluency, vocabulary, grammar, coherence.

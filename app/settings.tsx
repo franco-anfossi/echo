@@ -230,6 +230,18 @@ export default function SettingsScreen() {
           />
           <View style={{ height: 1, backgroundColor: themeColors.border }} />
           <Button
+            title="Borrar datos locales"
+            variant="ghost"
+            onPress={async () => {
+              await clearAllEchoCache();
+              Alert.alert('Listo', 'Caché local eliminada.');
+            }}
+            textColor={themeColors.text}
+            icon={<Ionicons name="trash-bin-outline" size={20} color={themeColors.subtext} />}
+            style={{ justifyContent: 'flex-start' }}
+          />
+          <View style={{ height: 1, backgroundColor: themeColors.border }} />
+          <Button
             title="Cerrar Sesión"
             variant="ghost"
             onPress={confirmSignOut}

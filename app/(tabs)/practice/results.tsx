@@ -608,32 +608,51 @@ export default function ResultsScreen() {
                 const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
                 const dur = attempt?.duration_seconds || 0;
                 const durationLabel = formatDuration(dur);
+                const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+                const paragraphs: string[] = [];
+                for (let i = 0; i < sentences.length; i += 2) {
+                  paragraphs.push(sentences.slice(i, i + 2).join(' ').trim());
+                }
                 return (
-                  <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="document-text-outline" size={14} color={themeColors.subtext} />
-                      <Typography variant="caption" color={themeColors.subtext}>
-                        {wordCount} palabra{wordCount === 1 ? '' : 's'}
-                      </Typography>
-                    </View>
-                    {dur > 0 && (
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Ionicons name="time-outline" size={14} color={themeColors.subtext} />
+                        <Ionicons name="document-text-outline" size={14} color={themeColors.subtext} />
                         <Typography variant="caption" color={themeColors.subtext}>
-                          {durationLabel}
+                          {wordCount} palabra{wordCount === 1 ? '' : 's'}
                         </Typography>
                       </View>
+                      {dur > 0 && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="time-outline" size={14} color={themeColors.subtext} />
+                          <Typography variant="caption" color={themeColors.subtext}>
+                            {durationLabel}
+                          </Typography>
+                        </View>
+                      )}
+                    </View>
+                    {transcriptExpanded ? (
+                      paragraphs.map((p, i) => (
+                        <Typography
+                          key={i}
+                          variant="body"
+                          style={{ lineHeight: 22, marginBottom: i === paragraphs.length - 1 ? 0 : 10 }}
+                        >
+                          {p}
+                        </Typography>
+                      ))
+                    ) : (
+                      <Typography
+                        variant="body"
+                        style={{ lineHeight: 22 }}
+                        numberOfLines={4}
+                      >
+                        {feedback.transcript}
+                      </Typography>
                     )}
-                  </View>
+                  </>
                 );
               })()}
-              <Typography
-                variant="body"
-                style={{ lineHeight: 22 }}
-                numberOfLines={transcriptExpanded ? undefined : 4}
-              >
-                {feedback.transcript}
-              </Typography>
             </View>
           </Animated.View>
         )}

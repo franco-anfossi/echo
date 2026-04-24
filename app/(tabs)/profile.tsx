@@ -41,6 +41,7 @@ export default function Profile() {
   const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number; best: number }[]>([]);
   const [activeDays, setActiveDays] = useState<boolean[]>(Array(30).fill(false));
   const [weeklyDelta, setWeeklyDelta] = useState<{ this: number; prev: number } | null>(null);
+  const [totalTimeSeconds, setTotalTimeSeconds] = useState(0);
 
   const cacheKey = user?.id ? `echo:profile:${user.id}` : null;
 
@@ -55,14 +56,15 @@ export default function Profile() {
       setModeBreakdown((prev) => (prev.length ? prev : c.modeBreakdown || []));
       if (Array.isArray(c.activeDays) && c.activeDays.length === 30) setActiveDays(c.activeDays);
       if (c.weeklyDelta) setWeeklyDelta((prev) => prev || c.weeklyDelta);
+      if (typeof c.totalTimeSeconds === 'number') setTotalTimeSeconds((prev) => prev || c.totalTimeSeconds);
       setLoading(false);
     });
   }, [cacheKey]);
 
   useEffect(() => {
     if (!cacheKey || loading) return;
-    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays, weeklyDelta });
-  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays, weeklyDelta]);
+    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays, weeklyDelta, totalTimeSeconds });
+  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays, weeklyDelta, totalTimeSeconds]);
 
   useFocusEffect(
     useCallback(() => {
@@ -130,6 +132,17 @@ export default function Profile() {
         .maybeSingle();
       const bestOverall = (bestRow as any)?.overall_score || 0;
       setBestScoreEver(bestOverall);
+
+      // Total practice time across all attempts
+      const { data: durationRows } = await supabase
+        .from('attempts')
+        .select('duration_seconds')
+        .eq('user_id', user.id);
+      const total = (durationRows || []).reduce(
+        (sum: number, r: any) => sum + (Number(r.duration_seconds) || 0),
+        0
+      );
+      setTotalTimeSeconds(total);
       const uniqueModes = new Set(
         validAttempts.map(a => a.practice_type).filter(Boolean) as string[]
       ).size;
@@ -402,6 +415,14 @@ export default function Profile() {
                 <StatBox label="Promedio Mes" value={monthlyAverage} icon="bar-chart" theme={themeColors} isHighlight />
                 <StatBox label="Mejor Puntaje" value={bestScoreEver} icon="star" theme={themeColors} specialColor="#F59E0B" />
                 <StatBox label="XP Total" value={stats?.xp || 0} icon="sparkles" theme={themeColors} />
+                {totalTimeSeconds > 0 && (() => {
+                  const h = Math.floor(totalTimeSeconds / 3600);
+                  const m = Math.floor((totalTimeSeconds % 3600) / 60);
+                  const label = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                  return (
+                    <StatBox label="Tiempo Total" value={label} icon="time" theme={themeColors} />
+                  );
+                })()}
               </View>
             </View>
 

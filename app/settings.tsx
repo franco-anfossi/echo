@@ -220,6 +220,23 @@ export default function SettingsScreen() {
 
         <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, gap: 12 }]}>
           <Button
+            title="Invitar amigo"
+            variant="ghost"
+            onPress={async () => {
+              try {
+                await Share.share({
+                  message: '¿Quieres mejorar tu oratoria en español? Probé Echo y me está ayudando mucho. Dale una mirada 👉',
+                });
+              } catch (e) {
+                console.error('Share invite failed', e);
+              }
+            }}
+            textColor={themeColors.primary}
+            icon={<Ionicons name="person-add-outline" size={20} color={themeColors.primary} />}
+            style={{ justifyContent: 'flex-start' }}
+          />
+          <View style={{ height: 1, backgroundColor: themeColors.border }} />
+          <Button
             title="Exportar mis datos"
             variant="ghost"
             onPress={exportData}

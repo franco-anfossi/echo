@@ -3,13 +3,15 @@ import { Colors } from '@/constants/Colors';
 import { AuthProvider, useAuth } from '@/ctx/AuthContext';
 import { ThemeProvider as AppThemeProvider } from '@/ctx/ThemeContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { supabaseConfigured } from '@/lib/supabase';
 import { ONBOARDING_KEY } from '@/app/onboarding';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -71,7 +73,53 @@ function RootLayoutNav() {
   );
 }
 
+function MissingConfigScreen() {
+  return (
+    <View style={missingStyles.container}>
+      <Ionicons name="construct-outline" size={56} color="#3B82F6" />
+      <Text style={missingStyles.title}>Configuración requerida</Text>
+      <Text style={missingStyles.body}>
+        Falta configurar las credenciales de Supabase. Define{' '}
+        <Text style={missingStyles.code}>EXPO_PUBLIC_SUPABASE_URL</Text> y{' '}
+        <Text style={missingStyles.code}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text> en{' '}
+        <Text style={missingStyles.code}>.env</Text> y reinicia la app.
+      </Text>
+    </View>
+  );
+}
+
+const missingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: '#FFF',
+  },
+  title: {
+    marginTop: 16,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  body: {
+    marginTop: 12,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    color: '#475569',
+  },
+  code: {
+    fontFamily: 'Courier',
+    color: '#0F172A',
+  },
+});
+
 export default function RootLayout() {
+  if (!supabaseConfigured) {
+    SplashScreen.hideAsync();
+    return <MissingConfigScreen />;
+  }
   return (
     <AppThemeProvider>
       <AuthProvider>

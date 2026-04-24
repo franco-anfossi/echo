@@ -324,8 +324,13 @@ export default function Home() {
               {userName}
             </Typography>
           </View>
-          <View style={{ alignItems: 'center' }}>
+          <View style={{ alignItems: 'flex-end' }}>
             <Typography variant="h3" color={themeColors.primary} weight="bold">{streak} 🔥</Typography>
+            {recentAttempts[0]?.created_at && (
+              <Typography variant="caption" color={themeColors.subtext}>
+                {relativeDate(recentAttempts[0].created_at)}
+              </Typography>
+            )}
           </View>
         </View>
 

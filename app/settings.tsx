@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { clearAllEchoCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Share, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
@@ -248,8 +249,34 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={{ marginTop: 'auto', marginBottom: 20, alignItems: 'center' }}>
-        <Typography variant="caption" color={themeColors.subtext}>Echo v1.0.0</Typography>
+      <View style={styles.section}>
+        <Typography variant="h3" style={{ marginBottom: 16 }}>Acerca de</Typography>
+        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, gap: 8 }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Typography variant="caption" color={themeColors.subtext}>Aplicación</Typography>
+            <Typography variant="caption" weight="bold">
+              {Constants.expoConfig?.name || 'Echo'}
+            </Typography>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Typography variant="caption" color={themeColors.subtext}>Versión</Typography>
+            <Typography variant="caption" weight="bold">
+              {Constants.expoConfig?.version || '1.0.0'}
+            </Typography>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Typography variant="caption" color={themeColors.subtext}>Plataforma</Typography>
+            <Typography variant="caption" weight="bold">
+              Expo {Constants.expoConfig?.sdkVersion || ''}
+            </Typography>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ marginBottom: 20, alignItems: 'center' }}>
+        <Typography variant="caption" color={themeColors.subtext}>
+          Hecho para practicar español · con ❤️
+        </Typography>
       </View>
 
     </ScreenWrapper>

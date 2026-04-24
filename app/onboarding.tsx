@@ -1,18 +1,22 @@
 import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+export const ONBOARDING_KEY = 'echo:onboarding-complete';
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
-  const handleStart = () => {
-    // In a real app, we would set a flag in AsyncStorage or DB
-    // For now, simple navigation
+  const handleStart = async () => {
+    try {
+      await AsyncStorage.setItem(ONBOARDING_KEY, '1');
+    } catch {}
     router.replace('/(tabs)');
   };
 

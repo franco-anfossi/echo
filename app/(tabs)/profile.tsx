@@ -4,6 +4,7 @@ import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
 import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { Achievement, computeAchievements } from '@/lib/achievements';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -33,6 +34,9 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [selectedMetric, setSelectedMetric] = useState(METRICS[0]);
   const [monthlyAverage, setMonthlyAverage] = useState(0);
+  const [bestScoreEver, setBestScoreEver] = useState(0);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number }[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -61,7 +65,8 @@ export default function Profile() {
       const { data: attemptsData, error: attemptsError } = await supabase
         .from('attempts')
         .select(`
-          created_at, 
+          created_at,
+          practice_type,
           attempt_scores (*),
           attempt_metrics (*)
         `)
@@ -71,10 +76,74 @@ export default function Profile() {
 
       if (attemptsError) throw attemptsError;
 
-      const validAttempts = attemptsData || [];
-      const scores = validAttempts.map(a => a.attempt_scores?.overall_score || 0).filter(s => s > 0);
+      type AttemptRow = {
+        created_at: string;
+        practice_type?: string | null;
+        attempt_scores: Record<string, number> | Record<string, number>[] | null;
+        attempt_metrics: Record<string, number> | Record<string, number>[] | null;
+      };
+      const validAttempts: AttemptRow[] = (attemptsData as AttemptRow[] | null) || [];
+      const pickRow = <T,>(rel: T | T[] | null | undefined): T | null => {
+        if (!rel) return null;
+        return Array.isArray(rel) ? (rel[0] ?? null) : rel;
+      };
+      const scores = validAttempts
+        .map(a => pickRow(a.attempt_scores)?.overall_score || 0)
+        .filter(s => s > 0);
       const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
       setMonthlyAverage(avg);
+
+      // Achievements: best score (all-time), unique modes (last 30d window OK as "exposure")
+      const { data: bestRow } = await supabase
+        .from('attempt_scores')
+        .select('overall_score, attempts!inner(user_id)')
+        .eq('attempts.user_id', user.id)
+        .order('overall_score', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const bestOverall = (bestRow as any)?.overall_score || 0;
+      setBestScoreEver(bestOverall);
+      const uniqueModes = new Set(
+        validAttempts.map(a => a.practice_type).filter(Boolean) as string[]
+      ).size;
+
+      // Per-mode breakdown over the last 30 days
+      const MODE_META: Record<string, { label: string; color: string }> = {
+        improv: { label: 'Improvisar', color: '#3B82F6' },
+        reading: { label: 'Lectura', color: '#10B981' },
+        vocab: { label: 'Vocabulario', color: '#8B5CF6' },
+        interview: { label: 'Entrevista', color: '#F59E0B' },
+        debate: { label: 'Debate', color: '#EF4444' },
+      };
+      const modeBuckets: Record<string, { sum: number; count: number }> = {};
+      for (const a of validAttempts) {
+        const mode = a.practice_type || 'improv';
+        if (!modeBuckets[mode]) modeBuckets[mode] = { sum: 0, count: 0 };
+        const score = pickRow(a.attempt_scores)?.overall_score || 0;
+        modeBuckets[mode].count += 1;
+        if (score > 0) modeBuckets[mode].sum += score;
+      }
+      setModeBreakdown(
+        Object.keys(MODE_META).map((id) => {
+          const b = modeBuckets[id] || { sum: 0, count: 0 };
+          return {
+            id,
+            label: MODE_META[id].label,
+            color: MODE_META[id].color,
+            count: b.count,
+            avg: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+          };
+        })
+      );
+      setAchievements(computeAchievements({
+        total_attempts: profileData?.total_attempts || 0,
+        streak_current: profileData?.streak_current || 0,
+        streak_longest: profileData?.streak_longest || 0,
+        xp: profileData?.xp || 0,
+        best_overall_score: bestOverall,
+        monthly_avg_score: avg,
+        unique_modes_used: uniqueModes,
+      }));
 
       // Filter for Chart (Last 7 days)
       const sevenDaysAgo = new Date();
@@ -111,13 +180,15 @@ export default function Profile() {
       // Calculate value based on selected metric
       let dailyValue = 0;
       if (dayAttempts.length > 0) {
-        // Average for the day
+        const pickRow = (rel: any): Record<string, number> | null => {
+          if (!rel) return null;
+          return Array.isArray(rel) ? (rel[0] ?? null) : rel;
+        };
         const sum = dayAttempts.reduce((acc, curr) => {
-          if (selectedMetric.type === 'score') {
-            return acc + (curr.attempt_scores?.[selectedMetric.id] || 0);
-          } else {
-            return acc + (curr.attempt_metrics?.[selectedMetric.id] || 0);
-          }
+          const row = selectedMetric.type === 'score'
+            ? pickRow(curr.attempt_scores)
+            : pickRow(curr.attempt_metrics);
+          return acc + (row?.[selectedMetric.id] || 0);
         }, 0);
         dailyValue = Math.round(sum / dayAttempts.length);
       }
@@ -189,6 +260,8 @@ export default function Profile() {
           </Typography>
           <TouchableOpacity
             onPress={() => router.push('/settings')}
+            accessibilityLabel="Abrir configuración"
+            accessibilityRole="button"
             style={{
               width: 44,
               height: 44,
@@ -233,8 +306,109 @@ export default function Profile() {
                 <StatBox label="Mejor Racha" value={stats?.streak_longest || 0} icon="trophy" theme={themeColors} />
                 <StatBox label="Prácticas" value={stats?.total_attempts || 0} icon="mic" theme={themeColors} />
                 <StatBox label="Promedio Mes" value={monthlyAverage} icon="bar-chart" theme={themeColors} isHighlight />
+                <StatBox label="Mejor Puntaje" value={bestScoreEver} icon="star" theme={themeColors} specialColor="#F59E0B" />
+                <StatBox label="XP Total" value={stats?.xp || 0} icon="sparkles" theme={themeColors} />
               </View>
             </View>
+
+            {/* Per-mode breakdown */}
+            {modeBreakdown.some(m => m.count > 0) && (
+              <View style={styles.section}>
+                <Typography variant="h3" style={{ marginBottom: 16 }}>Por modalidad (30 días)</Typography>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {modeBreakdown.map((m) => {
+                    const inactive = m.count === 0;
+                    return (
+                      <View
+                        key={m.id}
+                        style={{
+                          width: '48%',
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          backgroundColor: themeColors.surface,
+                          borderColor: inactive ? themeColors.border : m.color + '55',
+                          opacity: inactive ? 0.6 : 1,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="caption" weight="bold" color={m.color}>
+                            {m.label.toUpperCase()}
+                          </Typography>
+                          <Typography variant="caption" color={themeColors.subtext}>
+                            {m.count}
+                          </Typography>
+                        </View>
+                        <Typography variant="h3" weight="bold" color={themeColors.text} style={{ marginTop: 4 }}>
+                          {inactive ? '–' : m.avg}
+                        </Typography>
+                        <Typography variant="caption" color={themeColors.subtext} style={{ fontSize: 10 }}>
+                          {inactive ? 'Sin práctica aún' : 'puntaje promedio'}
+                        </Typography>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Achievements */}
+            {achievements.length > 0 && (() => {
+              const unlockedCount = achievements.filter(a => a.unlocked).length;
+              return (
+              <View style={styles.section}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <Typography variant="h3">Logros</Typography>
+                  <Typography variant="caption" color={themeColors.subtext}>
+                    {unlockedCount} / {achievements.length}
+                  </Typography>
+                </View>
+                {unlockedCount === 0 && (
+                  <View style={[styles.achievementsHint, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.border }]}>
+                    <Ionicons name="medal-outline" size={20} color={themeColors.subtext} />
+                    <Typography variant="caption" color={themeColors.subtext} style={{ flex: 1, lineHeight: 18 }}>
+                      Aún no desbloqueas logros. Tu primera práctica es la más cercana.
+                    </Typography>
+                  </View>
+                )}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 4 }}>
+                  {achievements.map((a) => (
+                    <View
+                      key={a.id}
+                      style={[
+                        styles.achievementCard,
+                        {
+                          backgroundColor: themeColors.surface,
+                          borderColor: a.unlocked ? a.color : themeColors.border,
+                          opacity: a.unlocked ? 1 : 0.65,
+                        }
+                      ]}
+                    >
+                      <View style={[styles.achievementIcon, { backgroundColor: a.color + (a.unlocked ? '22' : '12') }]}>
+                        <Ionicons name={a.icon as any} size={26} color={a.color} />
+                      </View>
+                      <Typography variant="label" weight="bold" style={{ marginTop: 10 }} numberOfLines={1}>
+                        {a.title}
+                      </Typography>
+                      <Typography variant="caption" color={themeColors.subtext} numberOfLines={2} style={{ marginTop: 2, minHeight: 32 }}>
+                        {a.description}
+                      </Typography>
+                      <View style={{ height: 6, backgroundColor: themeColors.inputBackground, borderRadius: 3, overflow: 'hidden', marginTop: 8 }}>
+                        <View style={{
+                          width: `${Math.round(a.progress * 100)}%`,
+                          height: '100%',
+                          backgroundColor: a.unlocked ? a.color : themeColors.primary,
+                        }} />
+                      </View>
+                      <Typography variant="caption" color={themeColors.subtext} style={{ marginTop: 6, fontSize: 10 }} numberOfLines={1}>
+                        {a.progressLabel}
+                      </Typography>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+              );
+            })()}
 
             {/* Weekly Evolution */}
             <View style={[styles.section, { marginBottom: 40 }]}>
@@ -480,6 +654,28 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  achievementCard: {
+    width: 160,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  achievementsHint: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  achievementIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },

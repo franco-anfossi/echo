@@ -338,11 +338,27 @@ export default function Practice() {
                 <Typography variant="label" color={themeColors.primary}>
                   SELECCIÓN
                 </Typography>
-                <TouchableOpacity onPress={() => setModalVisible(true)}>
-                  <Typography variant="label" color={themeColors.primary}>
-                    CAMBIAR
-                  </Typography>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                  {selectedItem && !isCustomItem(selectedItem) && (
+                    <TouchableOpacity
+                      onPress={() => toggleFavorite(selectedItem.id)}
+                      accessibilityLabel={isFavorite(selectedItem.id) ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                      accessibilityRole="button"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons
+                        name={isFavorite(selectedItem.id) ? 'star' : 'star-outline'}
+                        size={20}
+                        color={isFavorite(selectedItem.id) ? '#F59E0B' : themeColors.primary}
+                      />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => setModalVisible(true)}>
+                    <Typography variant="label" color={themeColors.primary}>
+                      CAMBIAR
+                    </Typography>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.cardBody}>

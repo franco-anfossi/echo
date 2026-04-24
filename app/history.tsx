@@ -44,15 +44,20 @@ export default function HistoryScreen() {
   const [attempts, setAttempts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('all');
 
+  const PAGE_SIZE = 20;
+
   useEffect(() => {
-    fetchHistory();
+    fetchHistory(true);
   }, []);
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (reset: boolean) => {
     try {
+      const offset = reset ? 0 : attempts.length;
       const { data, error } = await supabase
         .from('attempts')
         .select(`
@@ -60,21 +65,31 @@ export default function HistoryScreen() {
           topics (title, difficulty),
           attempt_scores (overall_score)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
 
       if (error) throw error;
-      setAttempts(data || []);
+      const rows = data || [];
+      setHasMore(rows.length === PAGE_SIZE);
+      setAttempts((prev) => (reset ? rows : [...prev, ...rows]));
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchHistory();
+    fetchHistory(true);
+  };
+
+  const onEndReached = () => {
+    if (loading || loadingMore || !hasMore || search || filter !== 'all') return;
+    setLoadingMore(true);
+    fetchHistory(false);
   };
 
   const sections = useMemo(() => {
@@ -228,6 +243,8 @@ export default function HistoryScreen() {
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.4}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Typography variant="body" color={themeColors.subtext} align="center">
@@ -238,9 +255,12 @@ export default function HistoryScreen() {
             </View>
           }
           ListFooterComponent={
-            totalShown > 0 ? (
+            loadingMore ? (
+              <ActivityIndicator color={themeColors.primary} style={{ marginTop: 16 }} />
+            ) : totalShown > 0 ? (
               <Typography variant="caption" color={themeColors.subtext} align="center" style={{ marginTop: 12 }}>
                 {totalShown} práctica{totalShown === 1 ? '' : 's'}
+                {!hasMore && attempts.length > 0 ? ' · fin' : ''}
               </Typography>
             ) : null
           }

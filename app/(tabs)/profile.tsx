@@ -368,6 +368,26 @@ export default function Profile() {
 
         {loading ? (
           <ActivityIndicator color={themeColors.primary} style={{ marginVertical: 20 }} />
+        ) : (stats?.total_attempts || 0) === 0 ? (
+          <View style={[styles.profileEmpty, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: themeColors.secondary, justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="rocket-outline" size={30} color={themeColors.primary} />
+            </View>
+            <Typography variant="h3" weight="bold" style={{ marginTop: 16 }}>
+              Aún no hay datos
+            </Typography>
+            <Typography variant="body" color={themeColors.subtext} align="center" style={{ marginTop: 4, lineHeight: 22 }}>
+              Completa tu primera práctica para ver tu progreso, logros y métricas aquí.
+            </Typography>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/practice')}
+              style={{ marginTop: 20, backgroundColor: themeColors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+            >
+              <Typography variant="label" weight="bold" color="#FFF">
+                Empezar ahora
+              </Typography>
+            </TouchableOpacity>
+          </View>
         ) : (
           <>
             {/* Stats Grid - Blue Theme */}
@@ -828,6 +848,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 12,
+  },
+  profileEmpty: {
+    alignItems: 'center',
+    padding: 32,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: 8,
   },
   achievementIcon: {
     width: 44,

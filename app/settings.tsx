@@ -27,26 +27,28 @@ export default function SettingsScreen() {
   const { preference, setPreference } = useThemePreference();
   const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   async function handleUpdateProfile() {
     if (!user) return;
     setLoading(true);
+    setSaved(false);
     try {
-      // 1. Update Auth Metadata
+      const trimmed = fullName.trim();
       const { error: authError } = await supabase.auth.updateUser({
-        data: { full_name: fullName }
+        data: { full_name: trimmed }
       });
       if (authError) throw authError;
 
-      // 2. Update Public Profile
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ full_name: fullName })
+        .update({ full_name: trimmed })
         .eq('id', user.id);
 
       if (profileError) throw profileError;
 
-      Alert.alert('Éxito', 'Perfil actualizado correctamente.');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -156,9 +158,10 @@ export default function SettingsScreen() {
           <Typography variant="body" color={themeColors.subtext} style={{ marginBottom: 24 }}>{user?.email}</Typography>
 
           <Button
-            title={loading ? "Guardando..." : "Actualizar Perfil"}
+            title={loading ? "Guardando..." : saved ? "Guardado ✓" : "Actualizar Perfil"}
             onPress={handleUpdateProfile}
             disabled={loading}
+            variant={saved ? 'secondary' : 'primary'}
           />
         </View>
       </View>

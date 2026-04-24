@@ -39,6 +39,7 @@ export default function Profile() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number }[]>([]);
   const [activeDays, setActiveDays] = useState<boolean[]>(Array(30).fill(false));
+  const [weeklyDelta, setWeeklyDelta] = useState<{ this: number; prev: number } | null>(null);
 
   const cacheKey = user?.id ? `echo:profile:${user.id}` : null;
 
@@ -52,14 +53,15 @@ export default function Profile() {
       setAchievements((prev) => (prev.length ? prev : c.achievements || []));
       setModeBreakdown((prev) => (prev.length ? prev : c.modeBreakdown || []));
       if (Array.isArray(c.activeDays) && c.activeDays.length === 30) setActiveDays(c.activeDays);
+      if (c.weeklyDelta) setWeeklyDelta((prev) => prev || c.weeklyDelta);
       setLoading(false);
     });
   }, [cacheKey]);
 
   useEffect(() => {
     if (!cacheKey || loading) return;
-    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays });
-  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays]);
+    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays, weeklyDelta });
+  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays, weeklyDelta]);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,6 +169,31 @@ export default function Profile() {
         monthly_avg_score: avg,
         unique_modes_used: uniqueModes,
       }));
+
+      // This-week vs previous-week average score
+      {
+        const now = new Date();
+        const startThis = new Date(now);
+        startThis.setDate(now.getDate() - 6);
+        startThis.setHours(0, 0, 0, 0);
+        const startPrev = new Date(startThis);
+        startPrev.setDate(startThis.getDate() - 7);
+
+        const bucket = (from: Date, to: Date) => {
+          const scores = validAttempts
+            .filter((a) => {
+              const d = new Date(a.created_at);
+              return d >= from && d < to;
+            })
+            .map((a) => pickRow(a.attempt_scores)?.overall_score || 0)
+            .filter((s) => s > 0);
+          return scores.length > 0 ? Math.round(scores.reduce((x, y) => x + y, 0) / scores.length) : 0;
+        };
+
+        const thisWeek = bucket(startThis, new Date(now.getTime() + 24 * 60 * 60 * 1000));
+        const prevWeek = bucket(startPrev, startThis);
+        setWeeklyDelta({ this: thisWeek, prev: prevWeek });
+      }
 
       // Active-day grid for last 30 days
       const active: boolean[] = [];
@@ -484,6 +511,38 @@ export default function Profile() {
 
             {/* Weekly Evolution */}
             <View style={[styles.section, { marginBottom: 40 }]}>
+              {weeklyDelta && (weeklyDelta.this > 0 || weeklyDelta.prev > 0) && (
+                <View style={[styles.deltaCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                  <View>
+                    <Typography variant="caption" color={themeColors.subtext}>
+                      Promedio esta semana
+                    </Typography>
+                    <Typography variant="h3" weight="bold">
+                      {weeklyDelta.this || '—'}
+                    </Typography>
+                  </View>
+                  {(() => {
+                    const diff = weeklyDelta.this - weeklyDelta.prev;
+                    const up = diff > 0;
+                    const flat = diff === 0 || weeklyDelta.prev === 0;
+                    const col = flat ? themeColors.subtext : up ? themeColors.success : themeColors.error;
+                    const iconName = flat ? 'remove' : up ? 'trending-up' : 'trending-down';
+                    return (
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name={iconName as any} size={16} color={col} />
+                          <Typography variant="label" weight="bold" color={col}>
+                            {flat ? 'sin cambio' : `${up ? '+' : ''}${diff} pts`}
+                          </Typography>
+                        </View>
+                        <Typography variant="caption" color={themeColors.subtext}>
+                          vs semana pasada ({weeklyDelta.prev || '—'})
+                        </Typography>
+                      </View>
+                    );
+                  })()}
+                </View>
+              )}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <Typography variant="h3">Progreso Semanal</Typography>
                 {selectedMetric.target && (
@@ -748,6 +807,15 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
+  },
+  deltaCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
   },
   achievementIcon: {
     width: 44,

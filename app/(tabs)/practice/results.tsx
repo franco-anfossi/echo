@@ -4,6 +4,8 @@ import { Typography } from '@/components/ui/Typography';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { Achievement, computeAchievements } from '@/lib/achievements';
+import { readCache, writeCache } from '@/lib/cache';
 import { formatDuration } from '@/lib/format';
 import { modeLabel } from '@/lib/practice-modes';
 import { supabase } from '@/lib/supabase';
@@ -59,6 +61,7 @@ export default function ResultsScreen() {
   const [metrics, setMetrics] = useState<any>(null);
   const [feedback, setFeedback] = useState<any>(null);
   const [isPersonalBest, setIsPersonalBest] = useState(false);
+  const [newlyUnlocked, setNewlyUnlocked] = useState<Achievement[]>([]);
   const retryCount = useRef(0);
   const lastRetryTime = useRef(0);
   const isRequestInProgress = useRef(false);
@@ -104,6 +107,61 @@ export default function ResultsScreen() {
         if (scoresRes.data) setScores(scoresRes.data);
         if (metricsRes.data) setMetrics(metricsRes.data);
         if (feedbackRes.data) setFeedback(feedbackRes.data);
+
+        // Detect achievements unlocked by this attempt
+        if (user?.id && scoresRes.data) {
+          try {
+            const [profile, bestRow, attemptsForModes] = await Promise.all([
+              supabase.from('profiles').select('streak_current, streak_longest, total_attempts, xp').eq('id', user.id).single(),
+              supabase
+                .from('attempt_scores')
+                .select('overall_score, attempts!inner(user_id)')
+                .eq('attempts.user_id', user.id)
+                .order('overall_score', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+              supabase.from('attempts').select('practice_type').eq('user_id', user.id),
+            ]);
+            const since = new Date();
+            since.setDate(since.getDate() - 30);
+            const monthlyScoresRes = await supabase
+              .from('attempt_scores')
+              .select('overall_score, attempts!inner(user_id, created_at)')
+              .eq('attempts.user_id', user.id)
+              .gte('attempts.created_at', since.toISOString());
+            const monthScores = (monthlyScoresRes.data || [])
+              .map((r: any) => r.overall_score)
+              .filter((s: number) => s > 0);
+            const monthlyAvg = monthScores.length > 0
+              ? Math.round(monthScores.reduce((a: number, b: number) => a + b, 0) / monthScores.length)
+              : 0;
+
+            const uniqueModes = new Set(
+              (attemptsForModes.data || []).map((r: any) => r.practice_type).filter(Boolean)
+            ).size;
+
+            const all = computeAchievements({
+              total_attempts: profile.data?.total_attempts || 0,
+              streak_current: profile.data?.streak_current || 0,
+              streak_longest: profile.data?.streak_longest || 0,
+              xp: profile.data?.xp || 0,
+              best_overall_score: (bestRow.data as any)?.overall_score || 0,
+              monthly_avg_score: monthlyAvg,
+              unique_modes_used: uniqueModes,
+            });
+            const seenKey = `echo:achievements-seen:${user.id}`;
+            const seen = (await readCache<string[]>(seenKey)) || [];
+            const seenSet = new Set(seen);
+            const fresh = all.filter((a) => a.unlocked && !seenSet.has(a.id));
+            if (fresh.length > 0) {
+              setNewlyUnlocked(fresh);
+            }
+            const allUnlockedIds = all.filter((a) => a.unlocked).map((a) => a.id);
+            writeCache(seenKey, Array.from(new Set([...seen, ...allUnlockedIds])));
+          } catch (achErr) {
+            console.error('Achievements check failed', achErr);
+          }
+        }
 
         // Personal best detection: highest score for this user+mode, excluding the current attempt
         if (scoresRes.data?.overall_score && user?.id && attemptData.practice_type) {
@@ -418,6 +476,26 @@ export default function ResultsScreen() {
           )}
         </Animated.View>
 
+        {newlyUnlocked.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(450).duration(600)} style={[styles.unlocksCard, { backgroundColor: '#FACC1515', borderColor: '#F59E0B' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <Ionicons name="trophy" size={20} color="#B45309" />
+              <Typography variant="label" weight="black" color="#B45309" style={{ letterSpacing: 0.5 }}>
+                LOGRO{newlyUnlocked.length === 1 ? '' : 'S'} DESBLOQUEADO{newlyUnlocked.length === 1 ? '' : 'S'}
+              </Typography>
+            </View>
+            {newlyUnlocked.map((a) => (
+              <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }}>
+                <Ionicons name={a.icon as any} size={18} color={a.color} />
+                <View style={{ flex: 1 }}>
+                  <Typography variant="body" weight="bold">{a.title}</Typography>
+                  <Typography variant="caption" color={themeColors.subtext}>{a.description}</Typography>
+                </View>
+              </View>
+            ))}
+          </Animated.View>
+        )}
+
         <Typography variant="h3" style={{ marginBottom: 12 }}>Métricas Técnicas</Typography>
 
         {/* Row 1: System Scores (3 Columns) */}
@@ -712,6 +790,12 @@ const styles = StyleSheet.create({
   transcriptCard: {
     padding: 16,
     borderRadius: 16,
+  },
+  unlocksCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
   },
   iconBox: {
     width: 32,

@@ -37,7 +37,7 @@ export default function Profile() {
   const [monthlyAverage, setMonthlyAverage] = useState(0);
   const [bestScoreEver, setBestScoreEver] = useState(0);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number }[]>([]);
+  const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number; best: number }[]>([]);
   const [activeDays, setActiveDays] = useState<boolean[]>(Array(30).fill(false));
   const [weeklyDelta, setWeeklyDelta] = useState<{ this: number; prev: number } | null>(null);
 
@@ -140,23 +140,27 @@ export default function Profile() {
         interview: { label: 'Entrevista', color: '#F59E0B' },
         debate: { label: 'Debate', color: '#EF4444' },
       };
-      const modeBuckets: Record<string, { sum: number; count: number }> = {};
+      const modeBuckets: Record<string, { sum: number; count: number; best: number }> = {};
       for (const a of validAttempts) {
         const mode = a.practice_type || 'improv';
-        if (!modeBuckets[mode]) modeBuckets[mode] = { sum: 0, count: 0 };
+        if (!modeBuckets[mode]) modeBuckets[mode] = { sum: 0, count: 0, best: 0 };
         const score = pickRow(a.attempt_scores)?.overall_score || 0;
         modeBuckets[mode].count += 1;
-        if (score > 0) modeBuckets[mode].sum += score;
+        if (score > 0) {
+          modeBuckets[mode].sum += score;
+          if (score > modeBuckets[mode].best) modeBuckets[mode].best = score;
+        }
       }
       setModeBreakdown(
         Object.keys(MODE_META).map((id) => {
-          const b = modeBuckets[id] || { sum: 0, count: 0 };
+          const b = modeBuckets[id] || { sum: 0, count: 0, best: 0 };
           return {
             id,
             label: MODE_META[id].label,
             color: MODE_META[id].color,
             count: b.count,
             avg: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+            best: b.best,
           };
         })
       );
@@ -444,6 +448,14 @@ export default function Profile() {
                         <Typography variant="caption" color={themeColors.subtext} style={{ fontSize: 10 }}>
                           {inactive ? 'Sin práctica aún' : 'puntaje promedio'}
                         </Typography>
+                        {!inactive && m.best > 0 && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
+                            <Ionicons name="star" size={10} color="#F59E0B" />
+                            <Typography variant="caption" color={themeColors.subtext} style={{ fontSize: 10 }}>
+                              Mejor: {m.best}
+                            </Typography>
+                          </View>
+                        )}
                       </View>
                     );
                   })}

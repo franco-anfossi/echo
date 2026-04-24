@@ -455,11 +455,11 @@ export default function Home() {
         </Typography>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 20 }}>
           {[
-            { id: 'improv', label: 'Improvisar', icon: 'mic', color: '#3B82F6' },
-            { id: 'reading', label: 'Lectura', icon: 'book', color: '#10B981' },
-            { id: 'vocab', label: 'Vocabulario', icon: 'extension-puzzle', color: '#8B5CF6' },
-            { id: 'interview', label: 'Entrevista', icon: 'briefcase', color: '#F59E0B' },
-            { id: 'debate', label: 'Debate', icon: 'people', color: '#EF4444' },
+            { id: 'improv', label: 'Improvisar', icon: 'mic', color: '#3B82F6', duration: '1:30' },
+            { id: 'reading', label: 'Lectura', icon: 'book', color: '#10B981', duration: '3:00' },
+            { id: 'vocab', label: 'Vocabulario', icon: 'extension-puzzle', color: '#8B5CF6', duration: '1:00' },
+            { id: 'interview', label: 'Entrevista', icon: 'briefcase', color: '#F59E0B', duration: '1:30' },
+            { id: 'debate', label: 'Debate', icon: 'people', color: '#EF4444', duration: '1:00' },
           ].map((m) => (
             <TouchableOpacity
               key={m.id}
@@ -470,7 +470,12 @@ export default function Home() {
                 <Ionicons name={m.icon as any} size={24} color={m.color} />
               </View>
               <Typography variant="body" weight="bold" style={{ marginTop: 12 }}>{m.label}</Typography>
-              <Typography variant="caption" color={themeColors.subtext} style={{ marginTop: 4 }}>+20 XP</Typography>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <Ionicons name="time-outline" size={12} color={themeColors.subtext} />
+                <Typography variant="caption" color={themeColors.subtext}>
+                  {m.duration} · +20 XP
+                </Typography>
+              </View>
             </TouchableOpacity>
           ))}
         </ScrollView>

@@ -86,6 +86,17 @@ export default function SettingsScreen() {
     }
   }
 
+  async function confirmSignOut() {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Seguro que quieres cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: signOut },
+      ]
+    );
+  }
+
   async function signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -220,7 +231,7 @@ export default function SettingsScreen() {
           <Button
             title="Cerrar Sesión"
             variant="ghost"
-            onPress={signOut}
+            onPress={confirmSignOut}
             textColor={themeColors.primary}
             icon={<Ionicons name="log-out-outline" size={20} color={themeColors.primary} />}
             style={{ justifyContent: 'flex-start' }}

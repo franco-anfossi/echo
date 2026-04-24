@@ -30,6 +30,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [suggestedMode, setSuggestedMode] = useState<{ id: string; label: string; reason: string; icon: string; color: string } | null>(null);
+  const [favoriteCount, setFavoriteCount] = useState(0);
 
   const DAILY_GOAL = 1;
 
@@ -88,6 +89,14 @@ export default function Home() {
       fetchData();
     }, [user])
   );
+
+  // Fetch favorite count from per-user cache
+  useEffect(() => {
+    if (!user?.id) return;
+    readCache<string[]>(`echo:favorites:${user.id}`).then((v) => {
+      setFavoriteCount(Array.isArray(v) ? v.length : 0);
+    });
+  }, [user?.id, refreshing]);
 
   // Hydrate from cache so returning to the tab feels instant
   useEffect(() => {
@@ -467,6 +476,22 @@ export default function Home() {
         </ScrollView>
       </View>
 
+      {favoriteCount > 0 && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push('/(tabs)/practice')}
+          style={[styles.favChip, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B55' }]}
+          accessibilityRole="button"
+          accessibilityLabel="Ver temas favoritos"
+        >
+          <Ionicons name="star" size={16} color="#F59E0B" />
+          <Typography variant="label" weight="bold" color="#B45309" style={{ flex: 1 }}>
+            Tienes {favoriteCount} tema{favoriteCount === 1 ? '' : 's'} favorito{favoriteCount === 1 ? '' : 's'}
+          </Typography>
+          <Ionicons name="arrow-forward" size={16} color="#B45309" />
+        </TouchableOpacity>
+      )}
+
       <View style={styles.section}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Typography variant="h3">
@@ -554,6 +579,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     alignItems: 'flex-start',
+  },
+  favChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
   },
   section: {
     flex: 1,

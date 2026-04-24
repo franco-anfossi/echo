@@ -38,6 +38,7 @@ export default function Profile() {
   const [bestScoreEver, setBestScoreEver] = useState(0);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [modeBreakdown, setModeBreakdown] = useState<{ id: string; label: string; color: string; count: number; avg: number }[]>([]);
+  const [activeDays, setActiveDays] = useState<boolean[]>(Array(30).fill(false));
 
   const cacheKey = user?.id ? `echo:profile:${user.id}` : null;
 
@@ -50,14 +51,15 @@ export default function Profile() {
       setBestScoreEver((prev) => prev || c.bestScoreEver || 0);
       setAchievements((prev) => (prev.length ? prev : c.achievements || []));
       setModeBreakdown((prev) => (prev.length ? prev : c.modeBreakdown || []));
+      if (Array.isArray(c.activeDays) && c.activeDays.length === 30) setActiveDays(c.activeDays);
       setLoading(false);
     });
   }, [cacheKey]);
 
   useEffect(() => {
     if (!cacheKey || loading) return;
-    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown });
-  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown]);
+    writeCache(cacheKey, { stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays });
+  }, [cacheKey, loading, stats, monthlyAverage, bestScoreEver, achievements, modeBreakdown, activeDays]);
 
   useFocusEffect(
     useCallback(() => {
@@ -165,6 +167,24 @@ export default function Profile() {
         monthly_avg_score: avg,
         unique_modes_used: uniqueModes,
       }));
+
+      // Active-day grid for last 30 days
+      const active: boolean[] = [];
+      const todayMid = new Date();
+      todayMid.setHours(0, 0, 0, 0);
+      const attemptKeys = new Set(
+        validAttempts.map((a) => {
+          const d = new Date(a.created_at);
+          d.setHours(0, 0, 0, 0);
+          return d.getTime();
+        })
+      );
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(todayMid);
+        d.setDate(todayMid.getDate() - i);
+        active.push(attemptKeys.has(d.getTime()));
+      }
+      setActiveDays(active);
 
       // Filter for Chart (Last 7 days)
       const sevenDaysAgo = new Date();
@@ -329,6 +349,37 @@ export default function Profile() {
                 <StatBox label="Promedio Mes" value={monthlyAverage} icon="bar-chart" theme={themeColors} isHighlight />
                 <StatBox label="Mejor Puntaje" value={bestScoreEver} icon="star" theme={themeColors} specialColor="#F59E0B" />
                 <StatBox label="XP Total" value={stats?.xp || 0} icon="sparkles" theme={themeColors} />
+              </View>
+            </View>
+
+            {/* 30-day streak calendar */}
+            <View style={styles.section}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <Typography variant="h3">Últimos 30 días</Typography>
+                <Typography variant="caption" color={themeColors.subtext}>
+                  {activeDays.filter(Boolean).length} día{activeDays.filter(Boolean).length === 1 ? '' : 's'}
+                </Typography>
+              </View>
+              <View style={[styles.calendarCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                  {activeDays.map((on, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 4,
+                        backgroundColor: on ? themeColors.primary : themeColors.inputBackground,
+                      }}
+                    />
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: themeColors.inputBackground }} />
+                  <Typography variant="caption" color={themeColors.subtext}>sin práctica</Typography>
+                  <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: themeColors.primary, marginLeft: 8 }} />
+                  <Typography variant="caption" color={themeColors.subtext}>activo</Typography>
+                </View>
               </View>
             </View>
 
@@ -692,6 +743,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 12,
+  },
+  calendarCard: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   achievementIcon: {
     width: 44,

@@ -5,6 +5,7 @@ import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/ctx/AuthContext';
 import { ThemePreference, useThemePreference } from '@/ctx/ThemeContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { clearAllEchoCache } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -85,8 +86,11 @@ export default function SettingsScreen() {
 
   async function signOut() {
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Error', error.message);
-    // Router usually handles auth state change automatically if using AuthContext but we can ensure nav
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+    await clearAllEchoCache();
   }
 
   async function confirmDeleteAccount() {
@@ -106,6 +110,7 @@ export default function SettingsScreen() {
       const { error } = await supabase.from('profiles').delete().eq('id', user.id);
       if (error) throw error;
       await supabase.auth.signOut();
+      await clearAllEchoCache();
       Alert.alert('Cuenta eliminada', 'Tu cuenta ha sido eliminada correctamente.');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'No se pudo eliminar la cuenta');

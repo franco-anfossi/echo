@@ -28,3 +28,19 @@ export async function writeCache<T>(key: string, value: T): Promise<void> {
     /* non-fatal */
   }
 }
+
+/**
+ * Remove every AsyncStorage key that starts with the echo: namespace.
+ * Used on sign-out / account deletion so the next login starts fresh.
+ */
+export async function clearAllEchoCache(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const owned = keys.filter((k) => k.startsWith('echo:'));
+    if (owned.length) {
+      await AsyncStorage.multiRemove(owned);
+    }
+  } catch {
+    /* non-fatal */
+  }
+}

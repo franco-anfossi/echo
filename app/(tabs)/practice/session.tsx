@@ -39,6 +39,7 @@ export default function SessionScreen() {
   const MAX_DURATION = getMaxDuration();
   const [timeLeft, setTimeLeft] = useState(MAX_DURATION);
   const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [levels, setLevels] = useState<number[]>(Array(16).fill(0.1));
 
   useEffect(() => {
     let interval: any;
@@ -129,7 +130,19 @@ export default function SessionScreen() {
       });
 
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        (status) => {
+          if (!status.isRecording) return;
+          // metering is in dBFS (typically -160..0). Map to 0..1.
+          const db = typeof status.metering === 'number' ? status.metering : -160;
+          const normalized = Math.max(0, Math.min(1, (db + 60) / 60));
+          setLevels((prev) => {
+            const next = prev.slice(1);
+            next.push(0.1 + normalized * 0.9);
+            return next;
+          });
+        },
+        100
       );
 
       setRecording(recording);
@@ -269,9 +282,17 @@ export default function SessionScreen() {
       default: // Improv
         return (
           <View style={[styles.vizContainer, { backgroundColor: themeColors.background }]}>
-            <View style={{ height: 60, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              {[...Array(5)].map((_, i) => (
-                <View key={i} style={{ width: 8, height: recordingStatus === 'recording' ? 30 + Math.random() * 30 : 10, backgroundColor: themeColors.primary, borderRadius: 4 }} />
+            <View style={{ height: 80, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              {levels.map((lvl, i) => (
+                <View
+                  key={i}
+                  style={{
+                    width: 6,
+                    height: Math.max(6, lvl * 70),
+                    backgroundColor: recordingStatus === 'recording' ? themeColors.primary : themeColors.border,
+                    borderRadius: 3,
+                  }}
+                />
               ))}
             </View>
             <Typography variant="body" color={themeColors.subtext} style={{ marginTop: 20 }}>

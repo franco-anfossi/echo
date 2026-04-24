@@ -48,6 +48,7 @@ export default function HistoryScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'high' | 'mid' | 'low'>('all');
 
   const PAGE_SIZE = 20;
 
@@ -88,7 +89,7 @@ export default function HistoryScreen() {
   };
 
   const onEndReached = () => {
-    if (loading || loadingMore || !hasMore || search || filter !== 'all') return;
+    if (loading || loadingMore || !hasMore || search || filter !== 'all' || scoreFilter !== 'all') return;
     setLoadingMore(true);
     fetchHistory(false);
   };
@@ -97,6 +98,13 @@ export default function HistoryScreen() {
     const term = search.trim().toLowerCase();
     const filtered = attempts.filter((a) => {
       if (filter !== 'all' && a.practice_type !== filter) return false;
+      if (scoreFilter !== 'all') {
+        const s = a.attempt_scores?.overall_score;
+        if (typeof s !== 'number') return false;
+        if (scoreFilter === 'high' && s < 80) return false;
+        if (scoreFilter === 'mid' && (s < 60 || s >= 80)) return false;
+        if (scoreFilter === 'low' && s >= 60) return false;
+      }
       if (!term) return true;
       const title = (a.topics?.title || a.target_text || '').toLowerCase();
       return title.includes(term);
@@ -111,7 +119,7 @@ export default function HistoryScreen() {
     return BUCKET_ORDER
       .filter((l) => byBucket[l]?.length)
       .map((l) => ({ title: l, data: byBucket[l] }));
-  }, [attempts, search, filter]);
+  }, [attempts, search, filter, scoreFilter]);
 
   const totalShown = sections.reduce((acc, s) => acc + s.data.length, 0);
 
@@ -204,7 +212,7 @@ export default function HistoryScreen() {
         autoCapitalize="none"
       />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 16 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
         {MODE_FILTERS.map((f) => {
           const active = filter === f.id;
           return (
@@ -218,6 +226,35 @@ export default function HistoryScreen() {
                 borderWidth: 1,
                 backgroundColor: active ? themeColors.primary : themeColors.surface,
                 borderColor: active ? themeColors.primary : themeColors.border,
+              }}
+            >
+              <Typography variant="caption" weight="bold" color={active ? '#FFF' : themeColors.subtext}>
+                {f.label}
+              </Typography>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 16 }}>
+        {[
+          { id: 'all', label: 'Puntaje' },
+          { id: 'high', label: '80+' },
+          { id: 'mid', label: '60-79' },
+          { id: 'low', label: '<60' },
+        ].map((f) => {
+          const active = scoreFilter === f.id;
+          return (
+            <TouchableOpacity
+              key={f.id}
+              onPress={() => setScoreFilter(f.id as any)}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 999,
+                borderWidth: 1,
+                backgroundColor: active ? themeColors.accent : themeColors.surface,
+                borderColor: active ? themeColors.accent : themeColors.border,
               }}
             >
               <Typography variant="caption" weight="bold" color={active ? '#FFF' : themeColors.subtext}>

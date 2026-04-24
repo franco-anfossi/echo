@@ -84,6 +84,7 @@ export default function ResultsScreen() {
       polling = false;
       clearInterval(pollInterval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptId]);
 
   const fetchResults = async () => {

@@ -51,6 +51,7 @@ export default function SessionScreen() {
       setTimeLeft(MAX_DURATION);
     }
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordingStatus]);
 
   // Auto-stop
@@ -58,6 +59,7 @@ export default function SessionScreen() {
     if (timeLeft === 0 && recordingStatus === 'recording') {
       stopRecording();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, recordingStatus]);
 
   // Light haptic warning at the 10s and 5s marks while recording
@@ -212,12 +214,11 @@ export default function SessionScreen() {
 
       if (attemptError) throw attemptError;
 
-      // 3. Process
+      // 3. Process (fire-and-forget: results screen polls and retries)
       supabase.functions.invoke('transcribe-audio', {
         body: { attemptId: attemptData.id }
       });
 
-      Alert.alert('Éxito', 'Grabación subida. Procesando resultados...');
       router.replace({
         pathname: '/(tabs)/practice/results',
         params: { attemptId: attemptData.id }

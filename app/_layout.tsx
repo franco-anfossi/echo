@@ -50,6 +50,7 @@ function RootLayoutNav() {
     }
 
     SplashScreen.hideAsync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, isLoading, segments, onboardingChecked, onboardingDone]);
 
   if (isLoading) {

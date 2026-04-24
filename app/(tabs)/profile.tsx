@@ -66,7 +66,8 @@ export default function Profile() {
   useFocusEffect(
     useCallback(() => {
       fetchProfileData();
-    }, [user])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id])
   );
 
   const fetchProfileData = async () => {

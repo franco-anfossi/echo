@@ -53,6 +53,7 @@ export default function HistoryScreen() {
 
   useEffect(() => {
     fetchHistory(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchHistory = async (reset: boolean) => {

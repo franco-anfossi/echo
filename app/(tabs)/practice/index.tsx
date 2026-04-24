@@ -92,6 +92,7 @@ export default function Practice() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   const fetchData = async () => {

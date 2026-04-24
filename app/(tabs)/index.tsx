@@ -87,7 +87,8 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-    }, [user])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id])
   );
 
   // Fetch favorite count from per-user cache
@@ -203,9 +204,10 @@ export default function Home() {
   };
 
   const checkDecay = async () => {
-    const { data } = await supabase.rpc('check_daily_decay');
-    if (data?.decayed) {
-      console.log('Decayed XP:', data.amount);
+    try {
+      await supabase.rpc('check_daily_decay');
+    } catch {
+      // RPC is optional; ignore if it isn't deployed
     }
   };
 

@@ -22,6 +22,14 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <TouchableOpacity
+        onPress={handleStart}
+        accessibilityLabel="Saltar onboarding"
+        accessibilityRole="button"
+        style={styles.skip}
+      >
+        <Text style={[styles.skipText, { color: theme.icon }]}>Saltar</Text>
+      </TouchableOpacity>
       <View style={styles.content}>
         <View style={styles.header}>
           <Ionicons name="chatbubbles-outline" size={80} color={theme.primary} />
@@ -53,6 +61,17 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  skip: {
+    position: 'absolute',
+    top: 16,
+    right: 20,
+    padding: 8,
+    zIndex: 10,
+  },
+  skipText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   content: {
     flex: 1,

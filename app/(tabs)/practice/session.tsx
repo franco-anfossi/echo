@@ -225,7 +225,14 @@ export default function SessionScreen() {
 
     } catch (error) {
       console.error(error);
-      Alert.alert('Error', 'No se pudo subir la grabación.');
+      Alert.alert(
+        'Error al subir',
+        'No se pudo subir la grabación. Verifica tu conexión e intenta nuevamente.',
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => setRecordingStatus('review') },
+          { text: 'Reintentar', onPress: () => uploadRecording() },
+        ]
+      );
       setRecordingStatus('review');
     }
   }
@@ -332,9 +339,21 @@ export default function SessionScreen() {
     );
   }
 
+  const progressPct = Math.max(0, Math.min(100, ((MAX_DURATION - timeLeft) / MAX_DURATION) * 100));
+
   return (
     <ScreenWrapper>
       <View style={styles.container}>
+        {recordingStatus === 'recording' && (
+          <View style={{ height: 3, backgroundColor: themeColors.inputBackground, borderRadius: 2, overflow: 'hidden', marginBottom: 12 }}>
+            <View style={{
+              width: `${progressPct}%`,
+              height: '100%',
+              backgroundColor: timeLeft <= 10 ? themeColors.error : themeColors.primary,
+              borderRadius: 2,
+            }} />
+          </View>
+        )}
         <View style={styles.header}>
           <View style={[
             styles.timerBubbleSmall,

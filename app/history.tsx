@@ -104,6 +104,17 @@ export default function HistoryScreen() {
     const color = modeColor(mode);
     const label = modeLabel(mode);
     const score = item.attempt_scores?.overall_score;
+    const difficulty: string | undefined = item.topics?.difficulty;
+    const difficultyLabel: Record<string, string> = {
+      beginner: 'Principiante',
+      intermediate: 'Intermedio',
+      advanced: 'Avanzado',
+    };
+    const difficultyColor: Record<string, string> = {
+      beginner: '#10B981',
+      intermediate: '#F59E0B',
+      advanced: '#EF4444',
+    };
     const scoreTier =
       typeof score === 'number'
         ? score >= 80
@@ -119,10 +130,17 @@ export default function HistoryScreen() {
       >
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8, flexWrap: 'wrap' }}>
               <View style={{ backgroundColor: color + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
                 <Typography variant="caption" weight="bold" color={color}>{label}</Typography>
               </View>
+              {difficulty && difficultyLabel[difficulty] && (
+                <View style={{ backgroundColor: (difficultyColor[difficulty] || themeColors.subtext) + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                  <Typography variant="caption" weight="bold" color={difficultyColor[difficulty] || themeColors.subtext}>
+                    {difficultyLabel[difficulty]}
+                  </Typography>
+                </View>
+              )}
               <Typography variant="caption" color={themeColors.subtext}>
                 {relativeDate(item.created_at)}
               </Typography>

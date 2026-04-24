@@ -5,13 +5,14 @@ import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
 import { useAuth } from '@/ctx/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { readCache, writeCache } from '@/lib/cache';
 import { formatDuration } from '@/lib/format';
 import { modeColor, modeLabel } from '@/lib/practice-modes';
 import { relativeDate } from '@/lib/relative-date';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -80,11 +81,33 @@ export default function Home() {
 
   const { level, progress, xpInLevel, xpNeededForLevel } = getLevelInfo(xp);
 
+  const cacheKey = user?.id ? `echo:home:${user.id}` : null;
+
   useFocusEffect(
     useCallback(() => {
       fetchData();
     }, [user])
   );
+
+  // Hydrate from cache so returning to the tab feels instant
+  useEffect(() => {
+    if (!cacheKey) return;
+    readCache<{
+      recentAttempts: any[];
+      streak: number;
+      xp: number;
+      todayCount: number;
+      todayBest: number | null;
+    }>(cacheKey).then((cached) => {
+      if (!cached) return;
+      setRecentAttempts((prev) => (prev.length ? prev : cached.recentAttempts || []));
+      setStreak((prev) => prev || cached.streak || 0);
+      setXp((prev) => prev || cached.xp || 0);
+      setTodayCount((prev) => prev || cached.todayCount || 0);
+      setTodayBest((prev) => (prev !== null ? prev : cached.todayBest ?? null));
+      setLoading(false);
+    });
+  }, [cacheKey]);
 
   const fetchData = async () => {
     if (!user) return;
@@ -259,6 +282,12 @@ export default function Home() {
     await fetchData();
     setRefreshing(false);
   };
+
+  // Persist the current home payload after each successful load
+  useEffect(() => {
+    if (!cacheKey || loading) return;
+    writeCache(cacheKey, { recentAttempts, streak, xp, todayCount, todayBest });
+  }, [cacheKey, loading, recentAttempts, streak, xp, todayCount, todayBest]);
 
   return (
     <ScreenWrapper>

@@ -3,7 +3,9 @@ import { Colors } from '@/constants/Colors';
 import { Strings } from '@/constants/Strings';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -11,13 +13,23 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => {
+          if (Platform.OS !== 'web') {
+            Haptics.selectionAsync().catch(() => {});
+          }
+        },
+      }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.tabIconDefault,
+        tabBarLabelStyle: { fontWeight: '600', fontSize: 11 },
         tabBarStyle: {
           backgroundColor: themeColors.background,
           borderTopColor: themeColors.border,
+          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingTop: 6,
         },
       }}
     >

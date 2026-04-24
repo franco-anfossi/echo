@@ -371,8 +371,21 @@ export default function SessionScreen() {
                 title="Reintentar"
                 variant="outline"
                 onPress={() => {
-                  setRecordingStatus('idle');
-                  setAudioUri(null);
+                  Alert.alert(
+                    'Reintentar',
+                    'Se descartará la grabación actual. ¿Continuar?',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Reintentar',
+                        style: 'destructive',
+                        onPress: () => {
+                          setRecordingStatus('idle');
+                          setAudioUri(null);
+                        },
+                      },
+                    ]
+                  );
                 }}
               />
             </View>

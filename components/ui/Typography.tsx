@@ -1,15 +1,26 @@
 
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { StyleSheet, Text, TextProps } from 'react-native';
+import { StyleSheet, Text, TextProps, TextStyle } from 'react-native';
+
+type FontWeight = 'light' | 'regular' | 'medium' | 'semibold' | 'bold' | 'black';
 
 interface TypographyProps extends TextProps {
   variant?: 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'caption' | 'label';
   color?: string;
-  weight?: 'regular' | 'medium' | 'bold';
+  weight?: FontWeight;
   align?: 'left' | 'center' | 'right';
   monospace?: boolean;
 }
+
+const WEIGHT_MAP: Record<FontWeight, TextStyle['fontWeight']> = {
+  light: '300',
+  regular: '400',
+  medium: '500',
+  semibold: '600',
+  bold: '700',
+  black: '900',
+};
 
 export function Typography({
   style,
@@ -35,14 +46,15 @@ export function Typography({
     }
   };
 
-  const getWeight = () => {
+  const getWeight = (): TextStyle['fontWeight'] => {
+    if (weight !== 'regular') return WEIGHT_MAP[weight];
     switch (variant) {
       case 'h1': return '700';
       case 'h2': return '600';
       case 'h3': return '600';
       case 'h4': return '600';
       case 'label': return '600';
-      default: return weight === 'bold' ? '700' : weight === 'medium' ? '500' : '400';
+      default: return '400';
     }
   };
 
@@ -52,7 +64,7 @@ export function Typography({
         getVariantStyle(),
         {
           color: color || themeColors.text,
-          fontWeight: getWeight() as any,
+          fontWeight: getWeight(),
           textAlign: align,
           fontFamily: monospace ? 'Courier' : undefined,
         },

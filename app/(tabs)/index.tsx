@@ -259,6 +259,11 @@ export default function Home() {
       interview: 'briefcase',
       debate: 'people',
     };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const itemDate = new Date(item.created_at);
+    itemDate.setHours(0, 0, 0, 0);
+    const isToday = today.getTime() === itemDate.getTime();
     return (
       <TouchableOpacity
         key={item.id}
@@ -270,9 +275,18 @@ export default function Home() {
             <Ionicons name={(modeIcon[mode] || 'mic') as any} size={20} color={color} />
           </View>
           <View style={{ flex: 1 }}>
-            <Typography variant="body" weight="bold" numberOfLines={1}>
-              {item.topics?.title || item.target_text || 'Tema personalizado'}
-            </Typography>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Typography variant="body" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {item.topics?.title || item.target_text || 'Tema personalizado'}
+              </Typography>
+              {isToday && (
+                <View style={{ backgroundColor: themeColors.success + '30', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <Typography variant="caption" weight="black" color={themeColors.success} style={{ fontSize: 10 }}>
+                    NEW
+                  </Typography>
+                </View>
+              )}
+            </View>
             <Typography variant="caption" color={themeColors.subtext}>
               {label} · {relativeDate(item.created_at)}
               {item.duration_seconds ? ` · ${formatDuration(item.duration_seconds)}` : ''}

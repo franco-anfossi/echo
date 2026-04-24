@@ -677,8 +677,36 @@ export default function ResultsScreen() {
 
         {/* Actions */}
         <Animated.View entering={FadeIn.delay(1500).duration(800)} style={styles.actions}>
+          {(() => {
+            const mode: string | undefined = attempt?.practice_type;
+            const tt: string = attempt?.target_text || '';
+            // Only offer a one-tap repeat when target_text is directly reusable
+            // (vocab/debate encode extra context that wouldn't round-trip cleanly).
+            const canRepeat = !!mode && (
+              (mode === 'reading' || mode === 'interview') && !!tt
+                || mode === 'improv' && !!tt
+                || mode === 'improv' && !!attempt?.topic_id
+            );
+            if (!canRepeat) return null;
+            return (
+              <Button
+                title="Repetir este tema"
+                onPress={() => {
+                  const params: Record<string, string> = {
+                    mode,
+                    topicTitle: attempt.topics?.title || 'Repetir',
+                  };
+                  if (tt) params.targetText = tt;
+                  if (attempt.topic_id) params.topicId = attempt.topic_id;
+                  router.replace({ pathname: '/(tabs)/practice/session', params });
+                }}
+                style={{ width: '100%' }}
+              />
+            );
+          })()}
           <Button
-            title="Practicar de nuevo"
+            title="Nueva práctica"
+            variant={attempt?.practice_type && attempt?.target_text ? 'outline' : 'primary'}
             onPress={() => router.replace('/(tabs)/practice')}
             style={{ width: '100%' }}
           />
